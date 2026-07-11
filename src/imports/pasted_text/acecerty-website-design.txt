@@ -1,0 +1,92 @@
+Design a responsive, modern training/bootcamp website for acecerty.com inspired by the layout, pacing, and conversion focus of trainingcamp.com. Do not copy logos, trademarked badges, or proprietary images. Produce a Figma file with a Design System, components, variants, auto-layout, tokens, and an interactive prototype for desktop and mobile. Follow WCAG AA accessibility and mobile-first responsiveness.
+
+Branding and Visual Direction
+- Tone: Professional, energetic, trust-focused.
+- Color tokens: primary deep navy, primary-dark, accent orange, accent-muted, surface, text. Provide hex codes.
+- Typography: Heading font (bold geometric sans), Body font (regular sans). Provide sizes and line heights for H1–H6, body, small, caption.
+- Imagery: Use original hero illustrations or abstract shapes and diverse professional photos. Provide hero illustrations and course thumbnails.
+
+Global Layout and Navigation
+- Header: sticky, compact; left logo, primary nav (Courses, Certifications, Corporate, About, Resources), right actions (Search, Login, CTA “Find Courses”). Header shrinks on scroll with subtle shadow.
+- Hero: full-width; left content (headline, subhead, primary CTA, secondary CTA), right visual (illustration/photo). Include an exam guarantee badge near CTA.
+- Footer: multi-column with quick links, certifications, contact, social icons, newsletter signup, legal.
+
+Homepage Structure
+1. Hero with headline, two CTAs (Primary: “Find Courses”; Secondary: “View Schedule”), exam guarantee badge, trust logos row.
+2. Search + Filters bar (keyword, certification dropdown, delivery toggle, date range).
+3. Featured courses carousel (cards with duration, delivery, price, tag).
+4. Why choose us three-column benefits (accelerated format, exam guarantee, hands-on labs).
+5. Course catalog grid with left filter rail (desktop) / modal filters (mobile).
+6. How it works 3-step timeline (Register → Train → Pass).
+7. Testimonials & success metrics (carousel + counters).
+8. Partners & accreditation logos row.
+9. FAQ accordion and final CTA strip.
+
+Course Catalog and Course Detail
+- Catalog page: grid of course cards (image, title, cert, duration, delivery, next date, price, CTA “Enroll”); left filter rail; sorting dropdown; results count.
+- Course detail page: hero with title and summary; badges (exam guarantee, CEUs); right sticky enrollment card (price, next date, seats, CTAs); tabs (Overview, Syllabus, Schedule, Instructors, Reviews, FAQs); downloadable syllabus; related courses carousel.
+- Enrollment flow: quick enroll modal (name, email, preferred date) then full checkout page with promo code, payment options, confirmation with calendar add and exam prep resources.
+
+Components and Patterns (deliver as Figma components with variants)
+- Header (default, scrolled, mobile)
+- Primary button (filled, outline, ghost; sizes)
+- Course card (compact, featured; hover states)
+- Filters (checkbox, multi-select chips, range slider)
+- Hero block (left content / right visual; centered variant)
+- Sticky enrollment card
+- Tabs (horizontal, vertical)
+- Accordion (FAQ)
+- Carousel (course/testimonial)
+- Badge (exam guarantee, CEU, lab included)
+- Form elements (inputs, selects, date picker, validation)
+- Toast / notification (success, error)
+- Footer (multi-column)
+All components must use Auto Layout, named layers, and tokens for spacing, color, and typography.
+
+Interactions and Prototype
+- Header shrink on scroll; mobile nav slide-in.
+- Course card hover: lift + CTA reveal.
+- Filter interactions: animated transitions and instant client-side filtering.
+- Sticky enrollment card: visible on desktop scroll; collapsible on mobile.
+- Modal flows: focus trap, ESC to close, accessible labels.
+- Provide clickable prototype for desktop and mobile covering: Home → Catalog → Course Detail → Enroll → Checkout.
+
+Responsive Rules
+- Breakpoints: Mobile 375px, Tablet 768px, Desktop 1024px and 1440px.
+- Grid: 12-column desktop, 8-column tablet, single column mobile.
+- Mobile behavior: filters become full-screen modal; sticky enrollment becomes inline CTA; hero stacks vertically.
+
+Accessibility and SEO
+- WCAG AA contrast ratios, keyboard navigable components, ARIA roles for accordions, modals, carousels.
+- Semantic structure: H1 per page, meta title and description placeholders, alt text for images.
+- Performance: SVG icons, optimized illustrations, lazy-load thumbnails.
+
+Content and Microcopy Examples
+- Hero headline: “Accelerated bootcamps to pass your certification exam”
+- Primary CTA: “Find Courses”
+- Secondary CTA: “View Schedule”
+- Exam guarantee badge: “Exam-Day Ready • Free Retake Guarantee”
+- Provide short instructor bios, course outcomes, prerequisites, and 3-line syllabus summaries.
+
+Assets Required from Client
+- Logo files (SVG, PNG) or request a placeholder wordmark.
+- Brand color hex codes or accept suggested palette.
+- 3–6 hero images or illustration direction.
+- Sample course data for 8 courses (title, duration, delivery, price, next date, short description).
+
+Deliverables and Handoff
+- Figma file with pages: Design System, Desktop, Tablet, Mobile, Prototype.
+- Design system page: color tokens, typography, spacing, components, icon set.
+- Interactive prototype for main flows.
+- Exportable assets: SVG icons, optimized images, CSS variables snippet for colors and typography.
+- Handoff notes: component usage, responsive rules, accessibility checklist, copy placeholders.
+
+Constraints and Legal Note
+- Use trainingcamp.com only as stylistic inspiration. Do not copy logos, trademarked badges, or proprietary images.
+
+Priority Implementation Plan (first 2 weeks)
+1. Design system, header, footer, tokens.
+2. Course card, catalog grid, filters (desktop + mobile).
+3. Course detail, sticky enroll card, prototype flow.
+
+End of prompt.

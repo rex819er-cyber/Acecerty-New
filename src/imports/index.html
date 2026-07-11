@@ -1,0 +1,1460 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Acecerty Landing</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --teal: #08a6a8;
+      --teal-dark: #067d80;
+      --ink: #082629;
+      --white: #ffffff;
+      --soft-white: rgba(255, 255, 255, 0.84);
+      --line: rgba(255, 255, 255, 0.22);
+      --shadow: 0 22px 60px rgba(2, 45, 48, 0.18);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: "Inter", Arial, sans-serif;
+      color: var(--white);
+      background: #000;
+    }
+
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    .page {
+      position: relative;
+      min-height: 100vh;
+      overflow-x: hidden;
+      background: #f6f8fb;
+    }
+
+    .site-header {
+      position: relative;
+      z-index: 5;
+      display: grid;
+      grid-template-columns: minmax(150px, 1fr) auto minmax(190px, 1fr);
+      align-items: center;
+      gap: 28px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 24px clamp(24px, 3vw, 58px);
+    }
+
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      position: relative;
+      z-index: 6;
+      width: 118px;
+      min-height: 36px;
+    }
+
+    .brand img {
+      display: block;
+      width: 100%;
+      height: auto;
+      filter: drop-shadow(0 4px 14px rgba(0, 0, 0, 0.34));
+    }
+
+    .nav {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 26px;
+      padding: 12px 20px;
+      border: 1px solid rgba(255, 255, 255, 0.32);
+      border-radius: 999px;
+      background: linear-gradient(135deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0.08));
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.38),
+        inset 0 -18px 32px rgba(255, 255, 255, 0.06),
+        0 18px 48px rgba(0, 44, 48, 0.18);
+      backdrop-filter: blur(18px) saturate(145%);
+      -webkit-backdrop-filter: blur(18px) saturate(145%);
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--soft-white);
+      white-space: nowrap;
+    }
+
+    .nav a,
+    .training-trigger {
+      transition: color 180ms ease, opacity 180ms ease;
+    }
+
+    .nav a:hover,
+    .training-trigger:hover {
+      color: var(--white);
+    }
+
+    .dropdown {
+      position: relative;
+    }
+
+    .training-trigger {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      border: 0;
+      padding: 0;
+      color: var(--soft-white);
+      background: transparent;
+      font: inherit;
+      cursor: pointer;
+    }
+
+    .training-trigger::after {
+      width: 7px;
+      height: 7px;
+      border-right: 2px solid currentColor;
+      border-bottom: 2px solid currentColor;
+      content: "";
+      transform: rotate(45deg) translateY(-2px);
+    }
+
+    .dropdown-menu {
+      position: absolute;
+      top: calc(100% + 16px);
+      left: 50%;
+      display: grid;
+      min-width: 224px;
+      gap: 4px;
+      padding: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.26);
+      border-radius: 18px;
+      background: rgba(10, 35, 38, 0.56);
+      color: var(--white);
+      box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.28),
+        0 24px 70px rgba(0, 20, 24, 0.32);
+      backdrop-filter: blur(24px) saturate(165%);
+      -webkit-backdrop-filter: blur(24px) saturate(165%);
+      opacity: 0;
+      pointer-events: none;
+      transform: translate(-50%, 8px);
+      transition: opacity 160ms ease, transform 160ms ease;
+    }
+
+    .dropdown-menu::before {
+      position: absolute;
+      top: -7px;
+      left: 50%;
+      width: 14px;
+      height: 14px;
+      border-top: 1px solid rgba(255, 255, 255, 0.26);
+      border-left: 1px solid rgba(255, 255, 255, 0.26);
+      background: rgba(10, 35, 38, 0.56);
+      content: "";
+      transform: translateX(-50%) rotate(45deg);
+      backdrop-filter: blur(24px) saturate(165%);
+      -webkit-backdrop-filter: blur(24px) saturate(165%);
+    }
+
+    .dropdown:hover .dropdown-menu,
+    .dropdown:focus-within .dropdown-menu {
+      opacity: 1;
+      pointer-events: auto;
+      transform: translate(-50%, 0);
+    }
+
+    .dropdown-menu a {
+      position: relative;
+      z-index: 1;
+      padding: 13px 14px;
+      border-radius: 12px;
+      color: rgba(255, 255, 255, 0.9);
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .dropdown-menu a:hover {
+      background: rgba(255, 255, 255, 0.18);
+      color: var(--white);
+    }
+
+    .header-actions {
+      display: flex;
+      justify-content: flex-end;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 44px;
+      padding: 0 22px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform 180ms ease, background 180ms ease, border-color 180ms ease;
+    }
+
+    .button:hover {
+      transform: translateY(-1px);
+    }
+
+    .button.secondary {
+      color: var(--white);
+      background: transparent;
+    }
+
+    .button.secondary:hover {
+      background: rgba(255, 255, 255, 0.1);
+      border-color: rgba(255, 255, 255, 0.42);
+    }
+
+    .button.primary {
+      border-color: var(--white);
+      color: var(--teal-dark);
+      background: var(--white);
+      box-shadow: 0 16px 36px rgba(2, 76, 78, 0.2);
+    }
+
+    .hero {
+      position: relative;
+      z-index: 1;
+      display: grid;
+      align-items: center;
+      width: 100%;
+      min-height: calc(100vh - 100px);
+      margin: 0 auto;
+      padding: 62px 24px 96px clamp(24px, 3vw, 58px);
+    }
+
+    .hero-video {
+      position: absolute;
+      inset: 0;
+      z-index: 0;
+      width: 100%;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    .hero-video video {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .hero-content {
+      position: relative;
+      z-index: 2;
+      width: min(650px, 100%);
+      justify-self: start;
+      text-align: left;
+    }
+
+    h1 {
+      margin: 0 0 24px;
+      font-size: clamp(46px, 7vw, 86px);
+      line-height: 0.98;
+      letter-spacing: 0;
+      font-weight: 800;
+      color: var(--white);
+      text-shadow: 0 4px 22px rgba(0, 0, 0, 0.28);
+    }
+
+    .hero-content p {
+      max-width: 610px;
+      margin: 0 0 34px;
+      color: rgba(255, 255, 255, 0.88);
+      font-size: clamp(18px, 2vw, 22px);
+      line-height: 1.6;
+      font-weight: 400;
+      text-shadow: 0 3px 18px rgba(0, 0, 0, 0.24);
+    }
+
+    .hero .button {
+      min-height: 52px;
+      padding: 0 28px;
+      font-size: 15px;
+    }
+
+    .courses {
+      position: relative;
+      z-index: 1;
+      padding: 92px 0 118px;
+      color: var(--ink);
+      background: #f6f8fb;
+    }
+
+    .section-heading {
+      width: min(920px, calc(100% - 48px));
+      margin: 0 auto 42px;
+      text-align: center;
+    }
+
+    .section-heading h2 {
+      margin: 0 0 12px;
+      font-size: clamp(38px, 5vw, 64px);
+      line-height: 1;
+      font-weight: 800;
+      letter-spacing: 0;
+      color: var(--ink);
+    }
+
+    .section-heading p {
+      margin: 0;
+      color: rgba(8, 38, 41, 0.68);
+      font-size: clamp(18px, 2vw, 23px);
+      line-height: 1.5;
+      font-weight: 400;
+    }
+
+    .course-carousel {
+      width: 100%;
+      overflow: hidden;
+      cursor: grab;
+      touch-action: pan-y;
+    }
+
+    .course-track {
+      display: flex;
+      width: max-content;
+      gap: 24px;
+      padding: 8px 24px;
+      animation: course-scroll 42s linear infinite;
+      will-change: transform;
+    }
+
+    .course-carousel:hover .course-track {
+      animation-play-state: paused;
+    }
+
+    .course-carousel.is-dragging {
+      cursor: grabbing;
+    }
+
+    .course-carousel.is-dragging .course-track {
+      animation: none;
+    }
+
+    .course-tile {
+      display: grid;
+      grid-template-rows: 184px auto;
+      width: 330px;
+      min-height: 398px;
+      overflow: hidden;
+      border: 1px solid rgba(8, 38, 41, 0.08);
+      border-radius: 18px;
+      background: #ffffff;
+      box-shadow: 0 18px 42px rgba(9, 47, 51, 0.1);
+      color: var(--ink);
+      flex: 0 0 auto;
+      cursor: pointer;
+      transform: translateY(0) scale(1);
+      transition: transform 220ms ease, box-shadow 220ms ease, border-color 220ms ease;
+      user-select: none;
+    }
+
+    .course-tile:hover,
+    .course-tile:focus-visible {
+      border-color: rgba(8, 166, 168, 0.34);
+      box-shadow: 0 28px 70px rgba(9, 47, 51, 0.18);
+      transform: translateY(-10px) scale(1.025);
+      outline: none;
+    }
+
+    .course-thumb {
+      display: grid;
+      place-items: center;
+      padding: 20px;
+      background:
+        linear-gradient(135deg, rgba(8, 166, 168, 0.95), rgba(4, 91, 96, 0.95)),
+        #08a6a8;
+      color: var(--white);
+      font-size: 34px;
+      font-weight: 800;
+      letter-spacing: 0;
+      transition: filter 220ms ease, transform 220ms ease;
+    }
+
+    .course-tile:hover .course-thumb,
+    .course-tile:focus-visible .course-thumb {
+      filter: saturate(125%) brightness(1.04);
+      transform: scale(1.02);
+    }
+
+    .course-info {
+      display: grid;
+      align-content: start;
+      gap: 12px;
+      padding: 24px;
+    }
+
+    .course-info h3 {
+      margin: 0;
+      color: var(--ink);
+      font-size: 23px;
+      line-height: 1.15;
+      font-weight: 800;
+      letter-spacing: 0;
+    }
+
+    .course-info p {
+      margin: 0;
+      color: rgba(8, 38, 41, 0.66);
+      font-size: 15px;
+      line-height: 1.5;
+      font-weight: 400;
+    }
+
+    .courses-cta {
+      display: flex;
+      justify-content: center;
+      margin-top: 48px;
+    }
+
+    .live-class {
+      position: relative;
+      z-index: 1;
+      padding: 112px clamp(24px, 5vw, 72px) 130px;
+      background:
+        linear-gradient(180deg, #f6f8fb 0%, #ffffff 22%, #f7fbfb 100%);
+      color: var(--ink);
+    }
+
+    .live-class-layout {
+      display: grid;
+      grid-template-columns: minmax(360px, 0.82fr) minmax(420px, 1.18fr);
+      align-items: stretch;
+      gap: clamp(28px, 4vw, 58px);
+      width: min(1220px, 100%);
+      margin: 0 auto;
+    }
+
+    .live-class-copy {
+      align-self: center;
+      padding: clamp(26px, 4vw, 42px);
+      border: 1px solid rgba(8, 38, 41, 0.08);
+      border-radius: 24px;
+      background:
+        linear-gradient(145deg, rgba(255, 255, 255, 0.98), rgba(245, 252, 252, 0.94));
+      box-shadow:
+        0 28px 80px rgba(9, 47, 51, 0.11),
+        inset 0 1px 0 rgba(255, 255, 255, 0.9);
+    }
+
+    .live-class-copy h2 {
+      margin: 0 0 28px;
+      color: var(--ink);
+      font-size: clamp(34px, 4vw, 52px);
+      line-height: 1.05;
+      font-weight: 700;
+      letter-spacing: 0;
+      text-transform: capitalize;
+    }
+
+    .live-class-copy h2::before {
+      display: block;
+      width: 54px;
+      height: 4px;
+      margin-bottom: 18px;
+      border-radius: 999px;
+      background: var(--teal);
+      content: "";
+    }
+
+    .live-form {
+      display: grid;
+      gap: 16px;
+    }
+
+    .field {
+      display: grid;
+      gap: 7px;
+    }
+
+    .field label {
+      color: rgba(8, 38, 41, 0.72);
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .field input,
+    .field textarea {
+      width: 100%;
+      border: 1px solid rgba(8, 38, 41, 0.11);
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.78);
+      color: var(--ink);
+      font: inherit;
+      font-size: 15px;
+      outline: none;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.84);
+      transition: border-color 180ms ease, box-shadow 180ms ease, background 180ms ease, transform 180ms ease;
+    }
+
+    .field input {
+      min-height: 56px;
+      padding: 0 17px;
+    }
+
+    .field textarea {
+      min-height: 118px;
+      padding: 16px 17px;
+      resize: vertical;
+    }
+
+    .field input:focus,
+    .field textarea:focus {
+      border-color: rgba(8, 166, 168, 0.62);
+      background: #ffffff;
+      box-shadow: 0 0 0 4px rgba(8, 166, 168, 0.12);
+      transform: translateY(-1px);
+    }
+
+    .course-select {
+      position: relative;
+    }
+
+    .course-select-trigger {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+      min-height: 56px;
+      border: 1px solid rgba(8, 38, 41, 0.11);
+      border-radius: 14px;
+      padding: 0 17px;
+      background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(246, 252, 252, 0.9));
+      color: rgba(8, 38, 41, 0.58);
+      font: inherit;
+      font-size: 15px;
+      text-align: left;
+      cursor: pointer;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+      transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
+    }
+
+    .course-select-trigger::after {
+      width: 9px;
+      height: 9px;
+      border-right: 2px solid rgba(8, 166, 168, 0.9);
+      border-bottom: 2px solid rgba(8, 166, 168, 0.9);
+      content: "";
+      transform: rotate(45deg) translateY(-3px);
+      transition: transform 180ms ease;
+    }
+
+    .course-select.is-open .course-select-trigger,
+    .course-select-trigger:focus-visible {
+      border-color: rgba(8, 166, 168, 0.62);
+      box-shadow: 0 0 0 4px rgba(8, 166, 168, 0.12);
+      transform: translateY(-1px);
+      outline: none;
+    }
+
+    .course-select.is-open .course-select-trigger::after {
+      transform: rotate(225deg) translate(-2px, -1px);
+    }
+
+    .course-options {
+      position: absolute;
+      top: calc(100% + 10px);
+      left: 0;
+      right: 0;
+      z-index: 10;
+      display: grid;
+      max-height: 270px;
+      overflow-y: auto;
+      padding: 8px;
+      border: 1px solid rgba(8, 38, 41, 0.1);
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.98);
+      box-shadow: 0 24px 58px rgba(9, 47, 51, 0.16);
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(-6px);
+      transition: opacity 160ms ease, transform 160ms ease;
+    }
+
+    .course-select.is-open .course-options {
+      opacity: 1;
+      pointer-events: auto;
+      transform: translateY(0);
+    }
+
+    .course-option {
+      min-height: 42px;
+      border: 0;
+      border-radius: 10px;
+      padding: 0 12px;
+      background: transparent;
+      color: var(--ink);
+      font: inherit;
+      font-size: 14px;
+      text-align: left;
+      cursor: pointer;
+    }
+
+    .course-option:hover,
+    .course-option:focus-visible {
+      background: rgba(8, 166, 168, 0.1);
+      color: var(--teal-dark);
+      outline: none;
+    }
+
+    .live-form .button {
+      width: fit-content;
+      min-height: 52px;
+      margin-top: 8px;
+      padding: 0 28px;
+    }
+
+    .live-class-image {
+      position: relative;
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, 0.74);
+      border-radius: 28px;
+      box-shadow:
+        0 34px 88px rgba(9, 47, 51, 0.18),
+        0 8px 22px rgba(9, 47, 51, 0.08);
+    }
+
+    .live-class-image::after {
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.08), transparent 36%),
+        linear-gradient(135deg, rgba(8, 166, 168, 0.22), transparent 42%);
+      content: "";
+      pointer-events: none;
+    }
+
+    .live-class-image img {
+      display: block;
+      width: 100%;
+      height: 100%;
+      min-height: 560px;
+      object-fit: cover;
+      transform: scale(1.01);
+    }
+
+    .tutors {
+      position: relative;
+      z-index: 1;
+      overflow: hidden;
+      padding: 112px clamp(24px, 5vw, 72px) 132px;
+      background: #050607;
+      color: var(--white);
+    }
+
+    .tutors-heading {
+      width: min(780px, 100%);
+      margin: 0 auto 76px;
+      text-align: center;
+    }
+
+    .tutors-heading h2 {
+      margin: 0 0 18px;
+      font-size: clamp(38px, 5vw, 68px);
+      line-height: 1;
+      font-weight: 800;
+      letter-spacing: 0;
+    }
+
+    .tutors-heading p {
+      margin: 0;
+      color: rgba(255, 255, 255, 0.72);
+      font-size: clamp(17px, 2vw, 22px);
+      line-height: 1.6;
+      font-weight: 400;
+    }
+
+    .tutor-deck {
+      position: relative;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 430px;
+      width: min(1040px, 100%);
+      margin: 0 auto;
+    }
+
+    .tutor-card {
+      position: relative;
+      width: min(260px, 24vw);
+      min-width: 210px;
+      aspect-ratio: 3 / 4;
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      border-radius: 24px;
+      padding: 0;
+      background: #111;
+      box-shadow: 0 32px 78px rgba(0, 0, 0, 0.42);
+      cursor: pointer;
+      transform-origin: 50% 95%;
+      transition: transform 240ms ease, box-shadow 240ms ease, border-color 240ms ease;
+    }
+
+    .tutor-card:nth-child(1) {
+      transform: translateX(62px) rotate(-17deg);
+      z-index: 1;
+    }
+
+    .tutor-card:nth-child(2) {
+      transform: translateX(22px) translateY(-16px) rotate(-6deg);
+      z-index: 2;
+    }
+
+    .tutor-card:nth-child(3) {
+      transform: translateX(-22px) translateY(-16px) rotate(7deg);
+      z-index: 3;
+    }
+
+    .tutor-card:nth-child(4) {
+      transform: translateX(-62px) rotate(18deg);
+      z-index: 4;
+    }
+
+    .tutor-card:hover,
+    .tutor-card:focus-visible {
+      z-index: 10;
+      border-color: rgba(8, 166, 168, 0.76);
+      box-shadow: 0 42px 96px rgba(0, 0, 0, 0.52);
+      outline: none;
+    }
+
+    .tutor-card:nth-child(1):hover,
+    .tutor-card:nth-child(1):focus-visible,
+    .tutor-card:nth-child(2):hover,
+    .tutor-card:nth-child(2):focus-visible,
+    .tutor-card:nth-child(3):hover,
+    .tutor-card:nth-child(3):focus-visible,
+    .tutor-card:nth-child(4):hover,
+    .tutor-card:nth-child(4):focus-visible {
+      transform: translateY(-28px) rotate(0deg) scale(1.04);
+    }
+
+    .tutor-card img {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .tutor-card::after {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(180deg, transparent 42%, rgba(0, 0, 0, 0.72) 100%);
+      content: "";
+      pointer-events: none;
+    }
+
+    .tutor-card span {
+      position: absolute;
+      left: 18px;
+      right: 18px;
+      bottom: 18px;
+      z-index: 1;
+      color: var(--white);
+      font-size: 18px;
+      font-weight: 800;
+      text-align: left;
+    }
+
+    .tutor-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 30;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      background: rgba(0, 0, 0, 0.68);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 180ms ease;
+    }
+
+    .tutor-modal.is-open {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .tutor-modal-panel {
+      position: relative;
+      display: grid;
+      grid-template-columns: minmax(280px, 0.9fr) minmax(280px, 1.1fr);
+      width: min(940px, 100%);
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      border-radius: 28px;
+      background: #ffffff;
+      color: var(--ink);
+      box-shadow: 0 40px 120px rgba(0, 0, 0, 0.42);
+      transform: translateY(14px) scale(0.98);
+      transition: transform 180ms ease;
+    }
+
+    .tutor-modal.is-open .tutor-modal-panel {
+      transform: translateY(0) scale(1);
+    }
+
+    .tutor-modal-media img {
+      display: block;
+      width: 100%;
+      height: 100%;
+      min-height: 520px;
+      object-fit: cover;
+    }
+
+    .tutor-modal-content {
+      display: grid;
+      align-content: center;
+      gap: 16px;
+      padding: clamp(28px, 4vw, 54px);
+    }
+
+    .tutor-modal-content h3 {
+      margin: 0;
+      color: var(--ink);
+      font-size: clamp(34px, 4vw, 56px);
+      line-height: 1;
+      font-weight: 800;
+      letter-spacing: 0;
+    }
+
+    .tutor-specialty {
+      margin: 0;
+      color: var(--teal-dark);
+      font-size: 15px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .tutor-bio {
+      margin: 6px 0 0;
+      color: rgba(8, 38, 41, 0.72);
+      font-size: 17px;
+      line-height: 1.7;
+      font-weight: 400;
+    }
+
+    .tutor-modal-close {
+      position: absolute;
+      top: 18px;
+      right: 18px;
+      z-index: 1;
+      display: grid;
+      place-items: center;
+      width: 42px;
+      height: 42px;
+      border: 1px solid rgba(8, 38, 41, 0.12);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.84);
+      color: var(--ink);
+      font-size: 24px;
+      line-height: 1;
+      cursor: pointer;
+    }
+
+    .site-footer {
+      position: relative;
+      z-index: 1;
+      padding: 72px clamp(24px, 5vw, 72px) 32px;
+      background: #050607;
+      color: var(--white);
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .footer-inner {
+      display: grid;
+      grid-template-columns: minmax(260px, 1fr) auto auto;
+      gap: clamp(28px, 5vw, 72px);
+      width: min(1180px, 100%);
+      margin: 0 auto;
+      align-items: start;
+    }
+
+    .footer-brand img {
+      width: 136px;
+      height: auto;
+      filter: drop-shadow(0 4px 14px rgba(0, 0, 0, 0.34));
+    }
+
+    .footer-brand p {
+      max-width: 380px;
+      margin: 18px 0 0;
+      color: rgba(255, 255, 255, 0.68);
+      font-size: 15px;
+      line-height: 1.7;
+    }
+
+    .footer-group h3 {
+      margin: 0 0 16px;
+      color: var(--white);
+      font-size: 14px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .footer-links,
+    .footer-socials {
+      display: grid;
+      gap: 11px;
+    }
+
+    .footer-links a,
+    .footer-socials a {
+      color: rgba(255, 255, 255, 0.68);
+      font-size: 15px;
+      font-weight: 500;
+      transition: color 180ms ease, transform 180ms ease;
+    }
+
+    .footer-links a:hover,
+    .footer-socials a:hover {
+      color: var(--white);
+      transform: translateX(2px);
+    }
+
+    .footer-note {
+      margin: 12px 0 0;
+      color: rgba(255, 255, 255, 0.42);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    .footer-bottom {
+      display: flex;
+      justify-content: space-between;
+      gap: 18px;
+      width: min(1180px, 100%);
+      margin: 48px auto 0;
+      padding-top: 24px;
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+      color: rgba(255, 255, 255, 0.48);
+      font-size: 14px;
+    }
+
+    @keyframes course-scroll {
+      from {
+        transform: translateX(0);
+      }
+
+      to {
+        transform: translateX(calc(-50% - 12px));
+      }
+    }
+
+    @media (max-width: 980px) {
+      .site-header {
+        grid-template-columns: 1fr;
+        justify-items: center;
+        gap: 18px;
+      }
+
+      .header-actions {
+        justify-content: center;
+      }
+
+      .hero {
+        min-height: auto;
+        padding-top: 46px;
+      }
+
+      .hero-content {
+        text-align: left;
+        margin: 0;
+      }
+
+      .hero-content p {
+        margin-right: 0;
+        margin-left: 0;
+      }
+    }
+
+    @media (max-width: 720px) {
+      .site-header,
+      .hero {
+        width: 100%;
+      }
+
+      .nav {
+        flex-wrap: wrap;
+        gap: 14px 20px;
+        white-space: normal;
+      }
+
+      .brand {
+        width: 112px;
+      }
+
+      .header-actions {
+        width: 100%;
+      }
+
+      .header-actions .button {
+        flex: 1;
+        padding: 0 16px;
+      }
+
+      h1 {
+        font-size: clamp(40px, 13vw, 58px);
+      }
+
+      .courses {
+        padding: 72px 0 92px;
+      }
+
+      .section-heading {
+        width: min(100% - 32px, 920px);
+      }
+
+      .course-tile {
+        grid-template-rows: 158px auto;
+        width: 288px;
+        min-height: 366px;
+      }
+
+      .live-class {
+        padding: 72px 18px 88px;
+      }
+
+      .live-class-layout {
+        grid-template-columns: 1fr;
+      }
+
+      .live-class-image {
+        order: -1;
+      }
+
+      .live-class-image img {
+        min-height: 320px;
+      }
+
+      .tutors {
+        padding: 82px 18px 96px;
+      }
+
+      .tutor-deck {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 18px;
+        min-height: auto;
+      }
+
+      .tutor-card {
+        width: 100%;
+        min-width: 0;
+      }
+
+      .tutor-card:nth-child(1),
+      .tutor-card:nth-child(2),
+      .tutor-card:nth-child(3),
+      .tutor-card:nth-child(4),
+      .tutor-card:nth-child(1):hover,
+      .tutor-card:nth-child(2):hover,
+      .tutor-card:nth-child(3):hover,
+      .tutor-card:nth-child(4):hover {
+        transform: none;
+      }
+
+      .tutor-modal-panel {
+        grid-template-columns: 1fr;
+      }
+
+      .tutor-modal-media img {
+        min-height: 300px;
+        max-height: 360px;
+      }
+
+      .footer-inner {
+        grid-template-columns: 1fr;
+      }
+
+      .footer-bottom {
+        flex-direction: column;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <div class="hero-video" aria-hidden="true">
+      <video src="assets/acecerty-hero.mp4" autoplay muted loop playsinline></video>
+    </div>
+
+    <header class="site-header" aria-label="Primary navigation">
+      <a class="brand" href="#" aria-label="Acecerty home">
+        <img src="assets/acecerty-logo-cropped.png" alt="Acecerty">
+      </a>
+
+      <nav class="nav">
+        <a href="#">Exam vouchers</a>
+        <a href="#">Courses</a>
+        <div class="dropdown">
+          <button class="training-trigger" type="button" aria-haspopup="true">Training</button>
+          <div class="dropdown-menu" role="menu">
+            <a href="#" role="menuitem">Private Training</a>
+            <a href="#" role="menuitem">Corporate Training</a>
+            <a href="#" role="menuitem">Virtual Classes</a>
+            <a href="#" role="menuitem">Physical Training</a>
+          </div>
+        </div>
+        <a href="#">FAQ</a>
+        <a href="#">Practice exams</a>
+      </nav>
+
+      <div class="header-actions">
+        <a class="button secondary" href="#">Login</a>
+        <a class="button primary" href="#">Get Started</a>
+      </div>
+    </header>
+
+    <section class="hero">
+      <div class="hero-content">
+        <h1>Ace Your Professional Certifications.</h1>
+        <p>From individual learners to enterprise teams — create, deliver, and scale impactful learning with a platform designed for growth.</p>
+        <a class="button primary" href="#">Get Started</a>
+      </div>
+    </section>
+
+    <section class="courses" aria-labelledby="courses-title">
+      <div class="section-heading">
+        <h2 id="courses-title">Our Courses.</h2>
+        <p>100% success guaranteed</p>
+      </div>
+
+      <div class="course-carousel" aria-label="Featured certification courses">
+        <div class="course-track">
+          <a class="course-tile" href="#"><div class="course-thumb">CCNA</div><div class="course-info"><h3>CCNA 200-301</h3><p>Build core networking skills across routing, switching, security fundamentals, and automation.</p></div></a>
+          <a class="course-tile" href="#"><div class="course-thumb">CISSP</div><div class="course-info"><h3>CISSP</h3><p>Prepare for advanced cybersecurity leadership with risk, architecture, governance, and operations.</p></div></a>
+          <a class="course-tile" href="#"><div class="course-thumb">CISM</div><div class="course-info"><h3>CISM</h3><p>Master information security management, incident response, and enterprise risk programs.</p></div></a>
+          <a class="course-tile" href="#"><div class="course-thumb">MB-800</div><div class="course-info"><h3>MB 800</h3><p>Learn Microsoft Dynamics 365 Business Central implementation, configuration, and workflows.</p></div></a>
+          <a class="course-tile" href="#"><div class="course-thumb">SAP</div><div class="course-info"><h3>SAP-C02</h3><p>Deepen AWS Solutions Architect skills for resilient, secure, and cost-aware cloud designs.</p></div></a>
+          <a class="course-tile" href="#"><div class="course-thumb">PL-200</div><div class="course-info"><h3>Microsoft PL-200</h3><p>Develop Power Platform solutions using Dataverse, automation, apps, and analytics.</p></div></a>
+          <a class="course-tile" href="#"><div class="course-thumb">SAA</div><div class="course-info"><h3>SAA-C02</h3><p>Prepare for AWS architecture scenarios across compute, storage, networking, and security.</p></div></a>
+          <a class="course-tile" href="#"><div class="course-thumb">LFCS</div><div class="course-info"><h3>LFCS</h3><p>Practice hands-on Linux administration across users, storage, networking, and services.</p></div></a>
+          <a class="course-tile" href="#"><div class="course-thumb">SPHR</div><div class="course-info"><h3>SPHR</h3><p>Advance strategic HR leadership knowledge in workforce planning, policy, and compliance.</p></div></a>
+          <a class="course-tile" href="#"><div class="course-thumb">PHR</div><div class="course-info"><h3>PHR</h3><p>Strengthen practical HR operations, employee relations, compensation, and talent planning.</p></div></a>
+          <a class="course-tile" href="#"><div class="course-thumb">SEC+</div><div class="course-info"><h3>CompTIA Security+</h3><p>Cover essential security concepts, threats, controls, architecture, and incident response.</p></div></a>
+          <a class="course-tile" href="#"><div class="course-thumb">AWS</div><div class="course-info"><h3>AWS Cloud Practitioner</h3><p>Learn cloud foundations, AWS services, pricing, security, and shared responsibility.</p></div></a>
+          <a class="course-tile" href="#"><div class="course-thumb">AZ</div><div class="course-info"><h3>Azure Administrator</h3><p>Manage Azure identities, compute, storage, virtual networks, monitoring, and governance.</p></div></a>
+          <a class="course-tile" href="#"><div class="course-thumb">PMP</div><div class="course-info"><h3>PMP</h3><p>Prepare for project leadership across people, process, business value, and delivery methods.</p></div></a>
+          <a class="course-tile" href="#"><div class="course-thumb">CCNA</div><div class="course-info"><h3>CCNA 200-301</h3><p>Build core networking skills across routing, switching, security fundamentals, and automation.</p></div></a>
+          <a class="course-tile" href="#"><div class="course-thumb">CISSP</div><div class="course-info"><h3>CISSP</h3><p>Prepare for advanced cybersecurity leadership with risk, architecture, governance, and operations.</p></div></a>
+          <a class="course-tile" href="#"><div class="course-thumb">CISM</div><div class="course-info"><h3>CISM</h3><p>Master information security management, incident response, and enterprise risk programs.</p></div></a>
+          <a class="course-tile" href="#"><div class="course-thumb">MB-800</div><div class="course-info"><h3>MB 800</h3><p>Learn Microsoft Dynamics 365 Business Central implementation, configuration, and workflows.</p></div></a>
+          <a class="course-tile" href="#"><div class="course-thumb">SAP</div><div class="course-info"><h3>SAP-C02</h3><p>Deepen AWS Solutions Architect skills for resilient, secure, and cost-aware cloud designs.</p></div></a>
+          <a class="course-tile" href="#"><div class="course-thumb">PL-200</div><div class="course-info"><h3>Microsoft PL-200</h3><p>Develop Power Platform solutions using Dataverse, automation, apps, and analytics.</p></div></a>
+          <a class="course-tile" href="#"><div class="course-thumb">SAA</div><div class="course-info"><h3>SAA-C02</h3><p>Prepare for AWS architecture scenarios across compute, storage, networking, and security.</p></div></a>
+          <a class="course-tile" href="#"><div class="course-thumb">LFCS</div><div class="course-info"><h3>LFCS</h3><p>Practice hands-on Linux administration across users, storage, networking, and services.</p></div></a>
+          <a class="course-tile" href="#"><div class="course-thumb">SPHR</div><div class="course-info"><h3>SPHR</h3><p>Advance strategic HR leadership knowledge in workforce planning, policy, and compliance.</p></div></a>
+          <a class="course-tile" href="#"><div class="course-thumb">PHR</div><div class="course-info"><h3>PHR</h3><p>Strengthen practical HR operations, employee relations, compensation, and talent planning.</p></div></a>
+          <a class="course-tile" href="#"><div class="course-thumb">SEC+</div><div class="course-info"><h3>CompTIA Security+</h3><p>Cover essential security concepts, threats, controls, architecture, and incident response.</p></div></a>
+          <a class="course-tile" href="#"><div class="course-thumb">AWS</div><div class="course-info"><h3>AWS Cloud Practitioner</h3><p>Learn cloud foundations, AWS services, pricing, security, and shared responsibility.</p></div></a>
+          <a class="course-tile" href="#"><div class="course-thumb">AZ</div><div class="course-info"><h3>Azure Administrator</h3><p>Manage Azure identities, compute, storage, virtual networks, monitoring, and governance.</p></div></a>
+          <a class="course-tile" href="#"><div class="course-thumb">PMP</div><div class="course-info"><h3>PMP</h3><p>Prepare for project leadership across people, process, business value, and delivery methods.</p></div></a>
+        </div>
+      </div>
+
+      <div class="courses-cta">
+        <a class="button primary" href="#">Get Started</a>
+      </div>
+    </section>
+
+    <section class="live-class" aria-labelledby="live-class-title">
+      <div class="live-class-layout">
+        <div class="live-class-copy">
+          <h2 id="live-class-title">Join a live class</h2>
+          <form class="live-form" autocomplete="off">
+            <div class="field">
+              <label for="student-name">Name</label>
+              <input id="student-name" name="name" type="text" autocomplete="off" placeholder="Enter your full name">
+            </div>
+
+            <div class="field">
+              <label for="student-email">Email</label>
+              <input id="student-email" name="email" type="email" autocomplete="off" placeholder="Enter your email address">
+            </div>
+
+            <div class="field">
+              <label for="course-choice">Course of choice</label>
+              <div class="course-select" data-course-select>
+                <button class="course-select-trigger" type="button" id="course-choice" aria-haspopup="listbox" aria-expanded="false">Select a course</button>
+                <input type="hidden" name="course" data-course-value>
+                <div class="course-options" role="listbox" aria-labelledby="course-choice">
+                  <button class="course-option" type="button" role="option">CCNA 200-301</button>
+                  <button class="course-option" type="button" role="option">CISSP</button>
+                  <button class="course-option" type="button" role="option">CISM</button>
+                  <button class="course-option" type="button" role="option">MB 800</button>
+                  <button class="course-option" type="button" role="option">SAP-C02</button>
+                  <button class="course-option" type="button" role="option">Microsoft PL-200</button>
+                  <button class="course-option" type="button" role="option">SAA-C02</button>
+                  <button class="course-option" type="button" role="option">LFCS</button>
+                  <button class="course-option" type="button" role="option">SPHR</button>
+                  <button class="course-option" type="button" role="option">PHR</button>
+                  <button class="course-option" type="button" role="option">CompTIA Security+</button>
+                  <button class="course-option" type="button" role="option">AWS Cloud Practitioner</button>
+                  <button class="course-option" type="button" role="option">Azure Administrator</button>
+                  <button class="course-option" type="button" role="option">PMP</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="field">
+              <label for="student-location">Location</label>
+              <input id="student-location" name="location" type="text" autocomplete="off" placeholder="City or preferred location">
+            </div>
+
+            <div class="field">
+              <label for="start-time">Preferred start time</label>
+              <input id="start-time" name="start-time" type="text" autocomplete="off" placeholder="Example: Weekday evenings">
+            </div>
+
+            <div class="field">
+              <label for="additional-info">Additional information <span>(Optional)</span></label>
+              <textarea id="additional-info" name="additional-info" autocomplete="off" placeholder="Tell us anything else we should know"></textarea>
+            </div>
+
+            <button class="button primary" type="submit">Submit</button>
+          </form>
+        </div>
+
+        <div class="live-class-image">
+          <img src="assets/classroom-live-class.png" alt="Students attending a live cybersecurity class">
+        </div>
+      </div>
+    </section>
+
+    <section class="tutors" aria-labelledby="tutors-title">
+      <div class="tutors-heading">
+        <h2 id="tutors-title">Meet Our Tutors</h2>
+        <p>Learn from industry-tested instructors who turn complex certification paths into clear, confident progress.</p>
+      </div>
+
+      <div class="tutor-deck">
+        <button class="tutor-card" type="button" data-name="Amara Okafor" data-specialty="Cybersecurity and CISSP" data-bio="Amara helps professionals build the mindset and technical confidence needed for security leadership. Her classes blend exam strategy, practical scenarios, and real-world security governance." data-image="assets/classroom-live-class.png">
+          <img src="assets/classroom-live-class.png" alt="Tutor Amara Okafor">
+          <span>Amara Okafor</span>
+        </button>
+        <button class="tutor-card" type="button" data-name="Daniel Brooks" data-specialty="Networking and CCNA" data-bio="Daniel specializes in making networking fundamentals feel practical and memorable. He guides learners through routing, switching, troubleshooting, and hands-on preparation for CCNA success." data-image="assets/classroom-live-class.png">
+          <img src="assets/classroom-live-class.png" alt="Tutor Daniel Brooks">
+          <span>Daniel Brooks</span>
+        </button>
+        <button class="tutor-card" type="button" data-name="Maya Chen" data-specialty="Cloud Architecture and AWS" data-bio="Maya trains cloud learners to design secure, resilient systems with confidence. Her sessions focus on architecture patterns, cost-aware decisions, and exam-ready cloud reasoning." data-image="assets/classroom-live-class.png">
+          <img src="assets/classroom-live-class.png" alt="Tutor Maya Chen">
+          <span>Maya Chen</span>
+        </button>
+        <button class="tutor-card" type="button" data-name="Victor Adeyemi" data-specialty="Microsoft Power Platform" data-bio="Victor brings business process automation to life through Power Platform training. He helps students connect Dataverse, Power Apps, and Power Automate into useful workplace solutions." data-image="assets/classroom-live-class.png">
+          <img src="assets/classroom-live-class.png" alt="Tutor Victor Adeyemi">
+          <span>Victor Adeyemi</span>
+        </button>
+      </div>
+    </section>
+
+    <footer class="site-footer">
+      <div class="footer-inner">
+        <div class="footer-brand">
+          <img src="assets/acecerty-logo-cropped.png" alt="Acecerty">
+          <p>Acecerty helps learners and teams prepare for professional certifications with practical courses, live training, and exam-ready resources.</p>
+        </div>
+
+        <div class="footer-group">
+          <h3>Explore</h3>
+          <div class="footer-links">
+            <a href="https://acecerty.com/" target="_blank" rel="noopener">Home</a>
+            <a href="https://acecerty.com/courses/" target="_blank" rel="noopener">Courses</a>
+            <a href="https://acecerty.com/training/physical-training/" target="_blank" rel="noopener">Physical Training</a>
+            <a href="https://acecerty.com/faqs/" target="_blank" rel="noopener">FAQs</a>
+            <a href="https://acecerty.com/practice-exams/" target="_blank" rel="noopener">Practice Exams</a>
+          </div>
+        </div>
+
+        <div class="footer-group">
+          <h3>Social</h3>
+          <div class="footer-socials">
+            <a href="https://www.linkedin.com/search/results/all/?keywords=Acecerty" target="_blank" rel="noopener">LinkedIn</a>
+            <a href="https://www.instagram.com/explore/search/keyword/?q=Acecerty" target="_blank" rel="noopener">Instagram</a>
+            <a href="https://www.facebook.com/search/top?q=Acecerty" target="_blank" rel="noopener">Facebook</a>
+            <a href="https://x.com/search?q=Acecerty&src=typed_query" target="_blank" rel="noopener">X</a>
+          </div>
+          <p class="footer-note">Official social profiles were not published on the Acecerty website at the time of lookup, so these links open platform searches for Acecerty.</p>
+        </div>
+      </div>
+
+      <div class="footer-bottom">
+        <span>© 2026 Acecerty. All rights reserved.</span>
+        <span>Ace Your Professional Certifications.</span>
+      </div>
+    </footer>
+  </main>
+
+  <div class="tutor-modal" role="dialog" aria-modal="true" aria-labelledby="tutor-modal-name">
+    <div class="tutor-modal-panel">
+      <button class="tutor-modal-close" type="button" aria-label="Close tutor profile">&times;</button>
+      <div class="tutor-modal-media">
+        <img src="assets/classroom-live-class.png" alt="">
+      </div>
+      <div class="tutor-modal-content">
+        <h3 id="tutor-modal-name">Tutor Name</h3>
+        <p class="tutor-specialty">Course specialty</p>
+        <p class="tutor-bio">Tutor biography</p>
+      </div>
+    </div>
+  </div>
+  <script>
+    const carousel = document.querySelector(".course-carousel");
+    const track = document.querySelector(".course-track");
+
+    let isDragging = false;
+    let startX = 0;
+    let currentX = 0;
+    let baseOffset = 0;
+    let dragOffset = 0;
+    let hasMoved = false;
+
+    const wrapOffset = (value) => {
+      const halfWidth = track.scrollWidth / 2;
+      if (!halfWidth) return value;
+      while (value <= -halfWidth) value += halfWidth;
+      while (value > 0) value -= halfWidth;
+      return value;
+    };
+
+    carousel.addEventListener("pointerdown", (event) => {
+      if (event.button !== 0) return;
+      event.preventDefault();
+      const matrix = new DOMMatrixReadOnly(getComputedStyle(track).transform);
+      isDragging = true;
+      hasMoved = false;
+      startX = event.clientX;
+      currentX = startX;
+      baseOffset = Number.isFinite(matrix.m41) ? matrix.m41 : 0;
+      dragOffset = baseOffset;
+      track.style.transform = `translateX(${dragOffset}px)`;
+      carousel.classList.add("is-dragging");
+      carousel.setPointerCapture(event.pointerId);
+    });
+
+    carousel.addEventListener("pointermove", (event) => {
+      if (!isDragging) return;
+      currentX = event.clientX;
+      const delta = (currentX - startX) * 1.35;
+      if (Math.abs(delta) > 4) hasMoved = true;
+      dragOffset = wrapOffset(baseOffset + delta);
+      track.style.transform = `translateX(${dragOffset}px)`;
+    });
+
+    const finishDrag = (event) => {
+      if (!isDragging) return;
+      isDragging = false;
+      dragOffset = wrapOffset(dragOffset);
+      track.style.transform = `translateX(${dragOffset}px)`;
+      carousel.classList.remove("is-dragging");
+      if (carousel.hasPointerCapture(event.pointerId)) {
+        carousel.releasePointerCapture(event.pointerId);
+      }
+      window.setTimeout(() => {
+        track.style.transform = "";
+      }, 900);
+    };
+
+    carousel.addEventListener("pointerup", finishDrag);
+    carousel.addEventListener("pointercancel", finishDrag);
+
+    carousel.addEventListener("click", (event) => {
+      if (!hasMoved) return;
+      event.preventDefault();
+      hasMoved = false;
+    }, true);
+
+    track.querySelectorAll("a").forEach((card) => {
+      card.setAttribute("draggable", "false");
+      card.addEventListener("dragstart", (event) => event.preventDefault());
+    });
+
+    const courseSelect = document.querySelector("[data-course-select]");
+    const courseTrigger = courseSelect?.querySelector(".course-select-trigger");
+    const courseValue = courseSelect?.querySelector("[data-course-value]");
+    const courseOptions = courseSelect?.querySelectorAll(".course-option");
+
+    const closeCourseSelect = () => {
+      if (!courseSelect || !courseTrigger) return;
+      courseSelect.classList.remove("is-open");
+      courseTrigger.setAttribute("aria-expanded", "false");
+    };
+
+    courseTrigger?.addEventListener("click", () => {
+      const isOpen = courseSelect.classList.toggle("is-open");
+      courseTrigger.setAttribute("aria-expanded", String(isOpen));
+    });
+
+    courseOptions?.forEach((option) => {
+      option.addEventListener("click", () => {
+        courseTrigger.textContent = option.textContent;
+        courseTrigger.style.color = "var(--ink)";
+        courseValue.value = option.textContent;
+        closeCourseSelect();
+      });
+    });
+
+    document.addEventListener("click", (event) => {
+      if (!courseSelect || courseSelect.contains(event.target)) return;
+      closeCourseSelect();
+    });
+
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") closeCourseSelect();
+    });
+
+    const tutorModal = document.querySelector(".tutor-modal");
+    const tutorModalImage = tutorModal?.querySelector(".tutor-modal-media img");
+    const tutorModalName = tutorModal?.querySelector("#tutor-modal-name");
+    const tutorModalSpecialty = tutorModal?.querySelector(".tutor-specialty");
+    const tutorModalBio = tutorModal?.querySelector(".tutor-bio");
+    const tutorModalClose = tutorModal?.querySelector(".tutor-modal-close");
+
+    const closeTutorModal = () => {
+      tutorModal?.classList.remove("is-open");
+      document.body.style.overflow = "";
+    };
+
+    document.querySelectorAll(".tutor-card").forEach((card) => {
+      card.addEventListener("click", () => {
+        tutorModalImage.src = card.dataset.image;
+        tutorModalImage.alt = card.querySelector("img").alt;
+        tutorModalName.textContent = card.dataset.name;
+        tutorModalSpecialty.textContent = card.dataset.specialty;
+        tutorModalBio.textContent = card.dataset.bio;
+        tutorModal.classList.add("is-open");
+        document.body.style.overflow = "hidden";
+      });
+    });
+
+    tutorModalClose?.addEventListener("click", closeTutorModal);
+    tutorModal?.addEventListener("click", (event) => {
+      if (event.target === tutorModal) closeTutorModal();
+    });
+
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") closeTutorModal();
+    });
+  </script>
+</body>
+</html>
