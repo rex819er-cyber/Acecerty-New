@@ -77,11 +77,7 @@ export function TrustLogos() {
 
       {/* Static grid fallback for reduced-motion / no-JS */}
       <div className="max-w-7xl mx-auto px-4 mt-8">
-        <div className="flex flex-wrap justify-center gap-2">
-          {CERT_LOGOS.map((badge) => (
-            <CertBadge key={badge.name} badge={badge} />
-          ))}
-        </div>
+        
       </div>
     </section>
   );
