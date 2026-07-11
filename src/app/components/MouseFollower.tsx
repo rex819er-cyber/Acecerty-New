@@ -81,8 +81,7 @@ export function MouseFollower() {
         }}
       />
 
-      {/* Ring cursor */}
-      {/* Dot */}
+      {/* Dot cursor */}
       <motion.div
         style={{
           x: springDotX,

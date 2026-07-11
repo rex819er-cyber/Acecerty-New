@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Facebook, Twitter, Linkedin, Youtube, Send, CheckCircle } from 'lucide-react';
+import { Facebook, Instagram, Send, CheckCircle } from 'lucide-react';
 import { AcecertyLogo } from './AcecertyLogo';
 import { useTheme } from '../context/ThemeContext';
 
@@ -42,11 +42,23 @@ const LINKS = {
   ],
 };
 
+const TikTokIcon = () => (
+  <svg viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4" aria-hidden="true">
+    <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-2.88 2.5 2.89 2.89 0 0 1-2.89-2.89 2.89 2.89 0 0 1 2.89-2.89c.28 0 .54.04.79.1V9.01a6.33 6.33 0 0 0-.79-.05 6.34 6.34 0 0 0-6.34 6.34 6.34 6.34 0 0 0 6.34 6.34 6.34 6.34 0 0 0 6.33-6.34V8.69a8.24 8.24 0 0 0 4.83 1.56V6.79a4.85 4.85 0 0 1-1.06-.1z" />
+  </svg>
+);
+
+const XIcon = () => (
+  <svg viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4" aria-hidden="true">
+    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+  </svg>
+);
+
 const SOCIALS = [
-  { icon: Facebook, label: 'Facebook' },
-  { icon: Twitter, label: 'Twitter' },
-  { icon: Linkedin, label: 'LinkedIn' },
-  { icon: Youtube, label: 'YouTube' },
+  { icon: Instagram,  label: 'Instagram', href: 'https://www.instagram.com/acecerty' },
+  { icon: TikTokIcon, label: 'TikTok',    href: 'https://www.tiktok.com/@acecerty' },
+  { icon: XIcon,      label: 'X',         href: 'https://x.com/Acecerty_' },
+  { icon: Facebook,   label: 'Facebook',  href: 'https://www.facebook.com/share/19PuoYipaD/' },
 ];
 
 export function Footer() {
@@ -130,39 +142,24 @@ export function Footer() {
             </p>
             {/* Social links */}
             <div className="flex gap-3">
-              {SOCIALS.map(({ icon: Icon, label }) => (
-                <button
+              {SOCIALS.map(({ icon: Icon, label, href }) => (
+                <a
                   key={label}
+                  href={href}
+                  target="_blank"
+                  rel="noopener noreferrer"
                   aria-label={label}
                   className="h-9 w-9 rounded-lg flex items-center justify-center border border-white/15 text-white/50 hover:text-white hover:border-white/30 transition-all"
                 >
-                  <Icon className="h-4 w-4" />
-                </button>
+                  <Icon />
+                </a>
               ))}
             </div>
           </div>
 
           {/* Link columns */}
           {Object.entries(LINKS).map(([heading, items]) => (
-            <div key={heading}>
-              <h4
-                className="text-white mb-4"
-                style={{ fontSize: '0.8rem', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' }}
-              >
-                {heading}
-              </h4>
-              <ul className="flex flex-col gap-2.5">
-                {items.map((item) => (
-                  <li key={item}>
-                    <button
-                      className="text-sm text-white/40 hover:text-white/80 transition-colors text-left"
-                    >
-                      {item}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
+            null
           ))}
         </div>
       </div>
