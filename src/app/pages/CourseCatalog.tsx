@@ -1,20 +1,56 @@
-import React, { useState, useMemo } from 'react';
-import { Search, Clock, Play, HelpCircle, X, ChevronRight } from 'lucide-react';
+import React, { useState, useMemo, useCallback } from 'react';
+import { Search, Clock, Play, HelpCircle, X, ChevronRight, ChevronLeft, BookOpen } from 'lucide-react';
 import { Link } from 'react-router';
 import { motion, AnimatePresence } from 'motion/react';
-import { CSV_COURSES, COURSES_PER_PAGE, TOTAL_CSV_PAGES, getCsvCoursePage } from '../data/csvCourses';
+import { CSV_COURSES, COURSES_PER_PAGE } from '../data/csvCourses';
 import type { CsvCourse } from '../data/csvCourses';
-import { COURSES } from '../data/courses';
-import { useCart } from '../context/CartContext';
 import { ImageWithFallback } from '../components/figma/ImageWithFallback';
 
-const ALL_CATEGORIES = Array.from(new Set(CSV_COURSES.map((c) => c.category))).sort();
+// ─── Constants ─────────────────────────────────────────────────────────────
+const ALL_CATEGORIES = ['All', ...Array.from(new Set(CSV_COURSES.map((c) => c.category))).sort()];
 
-function MetaBadge({ icon: Icon, label, color }: { icon: React.ElementType; label: string; color: string }) {
+const CATEGORY_ACCENT: Record<string, string> = {
+  CompTIA:            '#E31837',
+  Cisco:              '#1BA0D7',
+  AWS:                '#FF9900',
+  Microsoft:          '#00A4EF',
+  'Project Management': '#6366F1',
+  Security:           '#8B5CF6',
+  DevOps:             '#10B981',
+  Development:        '#F59E0B',
+  Design:             '#EC4899',
+  Marketing:          '#F97316',
+  Business:           '#14B8A6',
+  Healthcare:         '#22C55E',
+  'AI & Data':        '#A855F7',
+  'IT Training':      'var(--ace-brand)',
+};
+
+function accentFor(category: string): string {
+  return CATEGORY_ACCENT[category] ?? 'var(--ace-brand)';
+}
+
+// ─── Meta badge ────────────────────────────────────────────────────────────
+function MetaBadge({
+  icon: Icon,
+  label,
+  accent,
+}: {
+  icon: React.ElementType;
+  label: string;
+  accent: string;
+}) {
   return (
     <span
-      className="inline-flex items-center gap-1 px-2 py-1 rounded-lg"
-      style={{ backgroundColor: color + '18', border: `1px solid ${color}30`, fontSize: '0.68rem', fontWeight: 600, color, fontFamily: 'var(--ace-font)' }}
+      className="inline-flex items-center gap-1 px-2 py-1 rounded-lg whitespace-nowrap"
+      style={{
+        backgroundColor: accent + '18',
+        border: `1px solid ${accent}35`,
+        color: accent,
+        fontSize: '0.67rem',
+        fontWeight: 600,
+        fontFamily: 'var(--ace-font)',
+      }}
     >
       <Icon className="h-3 w-3 flex-shrink-0" />
       {label}
@@ -22,78 +58,138 @@ function MetaBadge({ icon: Icon, label, color }: { icon: React.ElementType; labe
   );
 }
 
-function CsvCourseCard({ course }: { course: CsvCourse }) {
-  const [hovered, setHovered] = useState(false);
+// ─── Course card ───────────────────────────────────────────────────────────
+function CourseCard({ course, index }: { course: CsvCourse; index: number }) {
+  const accent = accentFor(course.category);
+
   return (
     <motion.article
-      layout
-      initial={{ opacity: 0, y: 16 }}
+      initial={{ opacity: 0, y: 18 }}
       animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, scale: 0.97 }}
-      transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
-      className="rounded-2xl overflow-hidden flex flex-col group"
+      transition={{ duration: 0.28, delay: index * 0.03, ease: [0.22, 1, 0.36, 1] }}
+      className="group flex flex-col rounded-2xl overflow-hidden"
       style={{
         backgroundColor: 'var(--card)',
         border: '1px solid var(--border)',
-        boxShadow: hovered ? 'var(--ace-shadow-lg)' : 'var(--ace-shadow-sm)',
-        transition: 'box-shadow 0.25s ease, transform 0.25s ease',
-        transform: hovered ? 'translateY(-3px)' : 'translateY(0)',
+        boxShadow: 'var(--ace-shadow-sm)',
       }}
     >
-      {/* Thumbnail */}
-      <div className="relative overflow-hidden flex-shrink-0" style={{ height: 168 }}>
-        <ImageWithFallback
-          src={course.image}
-          alt={course.title}
-          className="w-full h-full object-cover transition-transform duration-500"
-          style={{ transform: hovered ? 'scale(1.06)' : 'scale(1)' }}
-        />
-        {/* Category badge */}
-        <div className="absolute top-3 left-3">
+      {/* ── Thumbnail ──────────────────────────────────────── */}
+      <div
+        className="relative overflow-hidden flex-shrink-0"
+        style={{ height: 172, backgroundColor: 'var(--ace-surface-alt)' }}
+      >
+        {course.image ? (
+          <ImageWithFallback
+            src={course.image}
+            alt={course.title}
+            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.05]"
+          />
+        ) : (
+          <div
+            className="w-full h-full flex items-end p-4"
+            style={{ background: 'linear-gradient(135deg,#050D1A,#0A1628)' }}
+          >
+            <span
+              className="text-white/80 leading-tight"
+              style={{ fontSize: 'clamp(1rem,2.5vw,1.3rem)', fontWeight: 800, fontFamily: 'var(--ace-font)' }}
+            >
+              {course.title.split(' ').slice(0, 4).join(' ')}
+            </span>
+          </div>
+        )}
+
+        {/* Category pill */}
+        <div className="absolute top-2.5 left-2.5">
           <span
             className="px-2.5 py-1 rounded-full"
-            style={{ fontSize: '0.65rem', fontWeight: 800, backgroundColor: 'rgba(0,162,182,0.88)', color: '#fff', backdropFilter: 'blur(6px)', fontFamily: 'var(--ace-font)' }}
+            style={{
+              fontSize: '0.62rem',
+              fontWeight: 800,
+              backgroundColor: accent + 'DD',
+              color: '#fff',
+              backdropFilter: 'blur(6px)',
+              fontFamily: 'var(--ace-font)',
+            }}
           >
             {course.category}
           </span>
         </div>
       </div>
 
-      {/* Content */}
+      {/* ── Body ───────────────────────────────────────────── */}
       <div className="flex flex-col flex-1 p-4">
         {/* Title */}
-        <h3 className="mb-2 leading-snug" style={{ fontSize: '0.87rem', fontWeight: 700, color: 'var(--foreground)', fontFamily: 'var(--ace-font)' }}>
+        <h3
+          className="mb-2 leading-snug line-clamp-2"
+          style={{
+            fontSize: '0.875rem',
+            fontWeight: 700,
+            color: 'var(--foreground)',
+            fontFamily: 'var(--ace-font)',
+          }}
+        >
           {course.title}
         </h3>
 
-        <p className="leading-relaxed mb-3 flex-1" style={{ fontSize: '0.76rem', color: 'var(--muted-foreground)', fontFamily: 'var(--ace-font)' }}>
-          {course.description.slice(0, 95)}…
+        {/* Description */}
+        <p
+          className="flex-1 mb-3 line-clamp-2 leading-relaxed"
+          style={{
+            fontSize: '0.75rem',
+            color: 'var(--muted-foreground)',
+            fontFamily: 'var(--ace-font)',
+          }}
+        >
+          {course.description}
         </p>
 
         {/* Meta badges */}
         <div className="flex flex-wrap gap-1.5 mb-4">
-          <MetaBadge icon={Clock} label={course.duration} color="var(--ace-brand)" />
-          <MetaBadge icon={Play} label={course.videos} color="#8B5CF6" />
+          {course.duration !== '—' && (
+            <MetaBadge icon={Clock} label={course.duration} accent="var(--ace-brand)" />
+          )}
+          {course.videos !== '—' && (
+            <MetaBadge icon={Play} label={course.videos} accent="#8B5CF6" />
+          )}
           {course.questions !== '—' && (
-            <MetaBadge icon={HelpCircle} label={course.questions} color="#F59E0B" />
+            <MetaBadge icon={HelpCircle} label={course.questions} accent="#F59E0B" />
           )}
         </div>
 
-        {/* Price + View link */}
-        <div className="flex items-center justify-between pt-3" style={{ borderTop: '1px solid var(--border)' }}>
-          <span style={{ fontSize: '1.05rem', fontWeight: 900, color: 'var(--ace-brand)', fontFamily: 'var(--ace-font)' }}>
+        {/* ── Footer: price + CTA ────────────────────────── */}
+        <div
+          className="flex items-center justify-between pt-3"
+          style={{ borderTop: '1px solid var(--border)' }}
+        >
+          <span
+            style={{
+              fontSize: '1.05rem',
+              fontWeight: 900,
+              color: 'var(--ace-brand)',
+              fontFamily: 'var(--ace-font)',
+            }}
+          >
             ₦{course.price.toLocaleString()}
           </span>
+
           <Link
             to={`/courses/${course.id}`}
-            className="inline-flex items-center gap-1 px-3.5 py-2 rounded-xl font-semibold transition-all active:scale-95"
-            style={{ backgroundColor: 'var(--ace-brand)', color: '#fff', fontSize: '0.78rem', fontFamily: 'var(--ace-font)' }}
-            onMouseEnter={e => (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--ace-brand-hover)'}
-            onMouseLeave={e => (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--ace-brand)'}
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl font-bold text-white transition-all duration-150 active:scale-95 hover:gap-2"
+            style={{
+              backgroundColor: 'var(--ace-brand)',
+              fontSize: '0.78rem',
+              fontFamily: 'var(--ace-font)',
+              boxShadow: '0 2px 10px rgba(0,162,182,0.25)',
+            }}
+            onMouseEnter={(e) =>
+              ((e.currentTarget as HTMLElement).style.backgroundColor = 'var(--ace-brand-hover)')
+            }
+            onMouseLeave={(e) =>
+              ((e.currentTarget as HTMLElement).style.backgroundColor = 'var(--ace-brand)')
+            }
           >
-            View Course <ChevronRight className="h-3.5 w-3.5" />
+            Enroll Now <ChevronRight className="h-3.5 w-3.5" />
           </Link>
         </div>
       </div>
@@ -101,61 +197,215 @@ function CsvCourseCard({ course }: { course: CsvCourse }) {
   );
 }
 
+// ─── Pagination ────────────────────────────────────────────────────────────
+function Pagination({
+  currentPage,
+  totalPages,
+  onPageChange,
+}: {
+  currentPage: number;
+  totalPages: number;
+  onPageChange: (p: number) => void;
+}) {
+  // Build visible page numbers: always show first, last, current ±1, with ellipsis
+  const pages: (number | '…')[] = [];
+  const addPage = (n: number) => { if (!pages.includes(n)) pages.push(n); };
+
+  addPage(1);
+  if (currentPage > 3) pages.push('…');
+  for (let i = Math.max(2, currentPage - 1); i <= Math.min(totalPages - 1, currentPage + 1); i++) addPage(i);
+  if (currentPage < totalPages - 2) pages.push('…');
+  if (totalPages > 1) addPage(totalPages);
+
+  return (
+    <div className="flex items-center justify-center gap-2 py-10 flex-wrap">
+      {/* Prev */}
+      <button
+        onClick={() => onPageChange(currentPage - 1)}
+        disabled={currentPage === 1}
+        className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl font-semibold transition-all"
+        style={{
+          backgroundColor: 'var(--card)',
+          border: '1px solid var(--border)',
+          color: currentPage === 1 ? 'var(--muted-foreground)' : 'var(--foreground)',
+          opacity: currentPage === 1 ? 0.4 : 1,
+          fontSize: '0.82rem',
+          fontFamily: 'var(--ace-font)',
+          cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
+        }}
+      >
+        <ChevronLeft className="h-4 w-4" /> Prev
+      </button>
+
+      {/* Page numbers */}
+      {pages.map((p, i) =>
+        p === '…' ? (
+          <span
+            key={`ellipsis-${i}`}
+            style={{ color: 'var(--muted-foreground)', fontSize: '0.9rem', padding: '0 4px', fontFamily: 'var(--ace-font)' }}
+          >
+            …
+          </span>
+        ) : (
+          <button
+            key={p}
+            onClick={() => onPageChange(p as number)}
+            className="px-4 py-2.5 rounded-xl font-bold transition-all"
+            style={{
+              minWidth: 44,
+              backgroundColor: currentPage === p ? 'var(--ace-brand)' : 'var(--card)',
+              color: currentPage === p ? '#fff' : 'var(--muted-foreground)',
+              border: currentPage === p ? '1px solid var(--ace-brand)' : '1px solid var(--border)',
+              boxShadow: currentPage === p ? '0 4px 14px rgba(0,162,182,0.30)' : 'none',
+              fontSize: '0.85rem',
+              fontFamily: 'var(--ace-font)',
+            }}
+          >
+            {p}
+          </button>
+        )
+      )}
+
+      {/* Next */}
+      <button
+        onClick={() => onPageChange(currentPage + 1)}
+        disabled={currentPage === totalPages}
+        className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl font-semibold transition-all"
+        style={{
+          backgroundColor: 'var(--card)',
+          border: '1px solid var(--border)',
+          color: currentPage === totalPages ? 'var(--muted-foreground)' : 'var(--foreground)',
+          opacity: currentPage === totalPages ? 0.4 : 1,
+          fontSize: '0.82rem',
+          fontFamily: 'var(--ace-font)',
+          cursor: currentPage === totalPages ? 'not-allowed' : 'pointer',
+        }}
+      >
+        Next <ChevronRight className="h-4 w-4" />
+      </button>
+    </div>
+  );
+}
+
+// ─── Main catalog page ─────────────────────────────────────────────────────
 export default function CourseCatalog() {
-  const { addToCart, items } = useCart();
   const [query, setQuery] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState<string>('all');
+  const [activeCategory, setActiveCategory] = useState('All');
   const [page, setPage] = useState(1);
 
+  // Filtered master list
   const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
     return CSV_COURSES.filter((c) => {
-      const matchQuery = !query || c.title.toLowerCase().includes(query.toLowerCase()) || c.category.toLowerCase().includes(query.toLowerCase());
-      const matchCat = categoryFilter === 'all' || c.category === categoryFilter;
-      return matchQuery && matchCat;
+      const matchQ =
+        !q ||
+        c.title.toLowerCase().includes(q) ||
+        c.category.toLowerCase().includes(q) ||
+        c.description.toLowerCase().includes(q);
+      const matchCat = activeCategory === 'All' || c.category === activeCategory;
+      return matchQ && matchCat;
     });
-  }, [query, categoryFilter]);
+  }, [query, activeCategory]);
 
-  const totalPages = Math.ceil(filtered.length / COURSES_PER_PAGE);
-  const currentPageCourses = filtered.slice((page - 1) * COURSES_PER_PAGE, page * COURSES_PER_PAGE);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / COURSES_PER_PAGE));
 
-  const clearFilters = () => { setQuery(''); setCategoryFilter('all'); setPage(1); };
-  const hasFilters = query || categoryFilter !== 'all';
+  // Clamp page when filters change
+  const safePage = Math.min(page, totalPages);
 
-  const handlePageChange = (p: number) => {
-    setPage(p);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
+  const currentCourses = useMemo(
+    () => filtered.slice((safePage - 1) * COURSES_PER_PAGE, safePage * COURSES_PER_PAGE),
+    [filtered, safePage]
+  );
+
+  const handlePageChange = useCallback(
+    (p: number) => {
+      setPage(Math.max(1, Math.min(p, totalPages)));
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    },
+    [totalPages]
+  );
+
+  const handleCategoryChange = useCallback((cat: string) => {
+    setActiveCategory(cat);
+    setPage(1);
+  }, []);
+
+  const handleQueryChange = useCallback((val: string) => {
+    setQuery(val);
+    setPage(1);
+  }, []);
+
+  const pageStart = (safePage - 1) * COURSES_PER_PAGE + 1;
+  const pageEnd = Math.min(safePage * COURSES_PER_PAGE, filtered.length);
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: 'var(--background)', fontFamily: 'var(--ace-font)' }}>
 
-      {/* Page hero — always dark */}
-      <div className="pt-24 sm:pt-28 pb-14 px-4" style={{ background: 'linear-gradient(135deg, #050D1A 0%, #0A1628 100%)' }}>
+      {/* ── Hero header ────────────────────────────────────── */}
+      <div
+        className="pt-24 sm:pt-28 pb-14 px-4"
+        style={{ background: 'linear-gradient(135deg,#050D1A 0%,#0A1628 60%,#051520 100%)' }}
+      >
         <div className="max-w-7xl mx-auto">
-          <p style={{ fontSize: '0.72rem', fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--ace-brand)', marginBottom: 10, fontFamily: 'var(--ace-font)' }}>
+          <p
+            style={{
+              fontSize: '0.7rem',
+              fontWeight: 800,
+              letterSpacing: '0.12em',
+              textTransform: 'uppercase',
+              color: 'var(--ace-brand)',
+              marginBottom: 10,
+              fontFamily: 'var(--ace-font)',
+            }}
+          >
             Course Catalog
           </p>
-          <h1 className="text-white mb-3 leading-tight" style={{ fontSize: 'clamp(1.8rem, 4vw, 3rem)', fontWeight: 800, fontFamily: 'var(--ace-font)' }}>
+          <h1
+            className="text-white leading-tight mb-3"
+            style={{ fontSize: 'clamp(1.8rem,4vw,3rem)', fontWeight: 800, fontFamily: 'var(--ace-font)' }}
+          >
             Find Your Next Certification
           </h1>
-          <p className="mb-8" style={{ color: 'rgba(255,255,255,0.6)', fontSize: '1.05rem', maxWidth: 520, fontFamily: 'var(--ace-font)' }}>
-            Browse {CSV_COURSES.length}+ courses — from accelerated bootcamps to self-paced online training.
+          <p
+            className="mb-8"
+            style={{
+              color: 'rgba(255,255,255,0.55)',
+              fontSize: '1rem',
+              maxWidth: 520,
+              fontFamily: 'var(--ace-font)',
+            }}
+          >
+            {CSV_COURSES.length} courses — from accelerated bootcamps to self-paced online training.
             All priced at ₦60,000 flat.
           </p>
 
-          {/* Search bar */}
+          {/* Search */}
           <div className="relative max-w-2xl">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5" style={{ color: 'rgba(255,255,255,0.4)' }} />
+            <Search
+              className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 pointer-events-none"
+              style={{ color: 'rgba(255,255,255,0.35)' }}
+            />
             <input
               type="text"
               value={query}
-              onChange={(e) => { setQuery(e.target.value); setPage(1); }}
-              placeholder="Search by course name, certification, or category…"
+              onChange={(e) => handleQueryChange(e.target.value)}
+              placeholder="Search by name, certification, or category…"
               className="w-full pl-12 pr-10 py-4 rounded-2xl outline-none shadow-lg"
-              style={{ fontSize: '0.9rem', backgroundColor: 'rgba(255,255,255,0.10)', color: '#fff', border: '1px solid rgba(255,255,255,0.15)', fontFamily: 'var(--ace-font)' }}
+              style={{
+                backgroundColor: 'rgba(255,255,255,0.09)',
+                border: '1px solid rgba(255,255,255,0.14)',
+                color: '#fff',
+                fontSize: '0.9rem',
+                fontFamily: 'var(--ace-font)',
+              }}
             />
             {query && (
-              <button onClick={() => { setQuery(''); setPage(1); }} className="absolute right-4 top-1/2 -translate-y-1/2" style={{ color: 'rgba(255,255,255,0.4)' }}>
+              <button
+                onClick={() => handleQueryChange('')}
+                className="absolute right-4 top-1/2 -translate-y-1/2"
+                style={{ color: 'rgba(255,255,255,0.4)' }}
+                aria-label="Clear search"
+              >
                 <X className="h-4 w-4" />
               </button>
             )}
@@ -163,172 +413,104 @@ export default function CourseCatalog() {
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      {/* ── Filter + grid area ─────────────────────────────── */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-4">
 
-        {/* Category filter chips */}
-        <div className="flex flex-wrap items-center gap-2.5 mb-8">
-          <button
-            onClick={() => { setCategoryFilter('all'); setPage(1); }}
-            className="px-4 py-2 rounded-full font-semibold transition-all"
-            style={{ fontSize: '0.82rem', backgroundColor: categoryFilter === 'all' ? 'var(--ace-brand)' : 'var(--card)', color: categoryFilter === 'all' ? '#fff' : 'var(--muted-foreground)', border: '1px solid var(--border)', fontFamily: 'var(--ace-font)' }}
-          >
-            All Categories
-          </button>
-          {ALL_CATEGORIES.map((cat) => (
-            <button
-              key={cat}
-              onClick={() => { setCategoryFilter(categoryFilter === cat ? 'all' : cat); setPage(1); }}
-              className="px-4 py-2 rounded-full font-semibold transition-all"
-              style={{ fontSize: '0.82rem', backgroundColor: categoryFilter === cat ? 'var(--ace-brand)' : 'var(--card)', color: categoryFilter === cat ? '#fff' : 'var(--muted-foreground)', border: '1px solid var(--border)', fontFamily: 'var(--ace-font)' }}
-            >
-              {cat}
-            </button>
-          ))}
-          <div className="ml-auto flex items-center gap-3">
-            {hasFilters && (
-              <button onClick={clearFilters} className="flex items-center gap-1.5" style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--ace-brand)', fontFamily: 'var(--ace-font)' }}>
-                <X className="h-3.5 w-3.5" /> Clear
-              </button>
-            )}
-            <span style={{ fontSize: '0.82rem', fontWeight: 500, color: 'var(--muted-foreground)', fontFamily: 'var(--ace-font)' }}>
-              {filtered.length} courses
-            </span>
-          </div>
-        </div>
-
-        {/* No results */}
-        {filtered.length === 0 && (
-          <div className="text-center py-24">
-            <div className="h-16 w-16 rounded-full flex items-center justify-center mx-auto mb-4" style={{ backgroundColor: 'var(--muted)' }}>
-              <Search className="h-7 w-7" style={{ color: 'var(--muted-foreground)' }} />
-            </div>
-            <p style={{ fontSize: '1.1rem', fontWeight: 600, color: 'var(--foreground)', marginBottom: 8, fontFamily: 'var(--ace-font)' }}>No courses found</p>
-            <p style={{ fontSize: '0.9rem', color: 'var(--muted-foreground)', marginBottom: 24, fontFamily: 'var(--ace-font)' }}>Try adjusting your filters or search terms.</p>
-            <button onClick={clearFilters} className="px-6 py-3 rounded-full font-semibold text-white" style={{ backgroundColor: 'var(--ace-brand)', fontFamily: 'var(--ace-font)' }}>
-              Clear All Filters
-            </button>
-          </div>
-        )}
-
-        {/* Course grid */}
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={`page-${page}-${categoryFilter}-${query}`}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.2 }}
-            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5 mb-10"
-          >
-            {currentPageCourses.map((course) => (
-              <CsvCourseCard key={course.id} course={course} />
-            ))}
-          </motion.div>
-        </AnimatePresence>
-
-        {/* Pagination */}
-        {totalPages > 1 && (
-          <div className="flex items-center justify-center gap-3 pt-4 pb-10">
-            {/* Prev */}
-            <button
-              onClick={() => handlePageChange(Math.max(1, page - 1))}
-              disabled={page === 1}
-              className="px-4 py-2.5 rounded-xl font-semibold transition-all"
-              style={{ backgroundColor: 'var(--card)', color: page === 1 ? 'var(--muted-foreground)' : 'var(--foreground)', border: '1px solid var(--border)', opacity: page === 1 ? 0.45 : 1, fontSize: '0.85rem', fontFamily: 'var(--ace-font)' }}
-            >
-              ← Prev
-            </button>
-
-            {/* Page buttons */}
-            {Array.from({ length: Math.min(totalPages, 3) }, (_, i) => i + 1).map((p) => (
+        {/* Category chips — horizontal scroll on mobile */}
+        <div className="flex gap-2 overflow-x-auto pb-2 mb-6 scrollbar-hide">
+          {ALL_CATEGORIES.map((cat) => {
+            const isActive = activeCategory === cat;
+            const accent = cat === 'All' ? 'var(--ace-brand)' : accentFor(cat);
+            return (
               <button
-                key={p}
-                onClick={() => handlePageChange(p)}
-                className="px-5 py-2.5 rounded-xl font-bold transition-all"
+                key={cat}
+                onClick={() => handleCategoryChange(cat)}
+                className="flex-shrink-0 px-4 py-2 rounded-full font-semibold transition-all"
                 style={{
-                  backgroundColor: page === p ? 'var(--ace-brand)' : 'var(--card)',
-                  color: page === p ? '#fff' : 'var(--muted-foreground)',
-                  border: page === p ? '1px solid var(--ace-brand)' : '1px solid var(--border)',
-                  boxShadow: page === p ? '0 4px 14px rgba(0,162,182,0.30)' : 'none',
-                  fontSize: '0.85rem',
+                  fontSize: '0.8rem',
+                  backgroundColor: isActive ? accent : 'var(--card)',
+                  color: isActive ? '#fff' : 'var(--muted-foreground)',
+                  border: isActive ? `1px solid ${accent}` : '1px solid var(--border)',
                   fontFamily: 'var(--ace-font)',
                 }}
               >
-                Page {p}
+                {cat}
               </button>
-            ))}
+            );
+          })}
+        </div>
 
-            {/* Next */}
+        {/* Result count + page indicator */}
+        <div className="flex items-center justify-between mb-6">
+          <p style={{ fontSize: '0.82rem', color: 'var(--muted-foreground)', fontFamily: 'var(--ace-font)' }}>
+            Showing <strong style={{ color: 'var(--foreground)' }}>{pageStart}–{pageEnd}</strong> of{' '}
+            <strong style={{ color: 'var(--foreground)' }}>{filtered.length}</strong> courses
+            {activeCategory !== 'All' && (
+              <> in <strong style={{ color: accentFor(activeCategory) }}>{activeCategory}</strong></>
+            )}
+          </p>
+          {(query || activeCategory !== 'All') && (
             <button
-              onClick={() => handlePageChange(Math.min(totalPages, page + 1))}
-              disabled={page === totalPages}
-              className="px-4 py-2.5 rounded-xl font-semibold transition-all"
-              style={{ backgroundColor: 'var(--card)', color: page === totalPages ? 'var(--muted-foreground)' : 'var(--foreground)', border: '1px solid var(--border)', opacity: page === totalPages ? 0.45 : 1, fontSize: '0.85rem', fontFamily: 'var(--ace-font)' }}
+              onClick={() => { setQuery(''); setActiveCategory('All'); setPage(1); }}
+              className="flex items-center gap-1.5"
+              style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--ace-brand)', fontFamily: 'var(--ace-font)' }}
             >
-              Next →
+              <X className="h-3.5 w-3.5" /> Clear filters
+            </button>
+          )}
+        </div>
+
+        {/* ── No results ───────────────────────────────────── */}
+        {filtered.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-28 text-center">
+            <div
+              className="h-16 w-16 rounded-full flex items-center justify-center mb-5"
+              style={{ backgroundColor: 'var(--muted)' }}
+            >
+              <BookOpen className="h-7 w-7" style={{ color: 'var(--muted-foreground)' }} />
+            </div>
+            <p style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--foreground)', marginBottom: 6, fontFamily: 'var(--ace-font)' }}>
+              No courses match your search
+            </p>
+            <p style={{ fontSize: '0.88rem', color: 'var(--muted-foreground)', marginBottom: 24, fontFamily: 'var(--ace-font)' }}>
+              Try different keywords or browse all categories.
+            </p>
+            <button
+              onClick={() => { setQuery(''); setActiveCategory('All'); setPage(1); }}
+              className="px-6 py-3 rounded-full font-bold text-white"
+              style={{ backgroundColor: 'var(--ace-brand)', fontFamily: 'var(--ace-font)' }}
+            >
+              Show All Courses
             </button>
           </div>
         )}
 
-        {/* ── Bootcamp / Featured divider ─────────────────── */}
-        <div className="mt-8 mb-6 flex items-center gap-4">
-          <div style={{ flex: 1, height: 1, backgroundColor: 'var(--border)' }} />
-          <span style={{ fontSize: '0.72rem', fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--muted-foreground)', fontFamily: 'var(--ace-font)' }}>
-            Live Bootcamps
-          </span>
-          <div style={{ flex: 1, height: 1, backgroundColor: 'var(--border)' }} />
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5 pb-16">
-          {COURSES.filter((c) => c.type === 'bootcamp').slice(0, 8).map((course) => {
-            const inCart = items.some((i) => i.course.id === course.id);
-            return (
-              <Link
-                key={course.id}
-                to={`/courses/${course.id}`}
-                className="rounded-2xl overflow-hidden flex flex-col group"
-                style={{ backgroundColor: 'var(--card)', border: '1px solid var(--border)', boxShadow: 'var(--ace-shadow-sm)', textDecoration: 'none' }}
-              >
-                {/* Thumbnail */}
-                <div className="relative overflow-hidden flex-shrink-0" style={{ height: 168, background: course.gradient || '#0A1628' }}>
-                  {course.image && (
-                    <ImageWithFallback
-                      src={course.image}
-                      alt={course.title}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                    />
-                  )}
-                  <div className="absolute top-3 right-3">
-                    <span className="px-2.5 py-1 rounded-full" style={{ fontSize: '0.65rem', fontWeight: 800, backgroundColor: 'rgba(0,162,182,0.88)', color: '#fff', fontFamily: 'var(--ace-font)' }}>
-                      Bootcamp
-                    </span>
-                  </div>
-                </div>
-                <div className="flex flex-col flex-1 p-4">
-                  <span style={{ fontSize: '0.68rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--ace-brand)', marginBottom: 4, fontFamily: 'var(--ace-font)' }}>
-                    {course.category}
-                  </span>
-                  <h3 className="mb-1 leading-snug" style={{ fontSize: '0.87rem', fontWeight: 700, color: 'var(--foreground)', fontFamily: 'var(--ace-font)' }}>
-                    {course.title}
-                  </h3>
-                  <p className="flex-1 mb-3 leading-relaxed" style={{ fontSize: '0.76rem', color: 'var(--muted-foreground)', fontFamily: 'var(--ace-font)' }}>
-                    {course.description.slice(0, 80)}…
-                  </p>
-                  <div className="flex items-center gap-1.5 mb-3" style={{ fontSize: '0.72rem', color: 'var(--muted-foreground)', fontFamily: 'var(--ace-font)' }}>
-                    <Clock className="h-3.5 w-3.5" /> {course.duration}
-                  </div>
-                  <div className="flex items-center justify-between pt-3" style={{ borderTop: '1px solid var(--border)' }}>
-                    <span style={{ fontSize: '1.05rem', fontWeight: 900, color: 'var(--ace-brand)', fontFamily: 'var(--ace-font)' }}>
-                      ₦{course.price.toLocaleString()}
-                    </span>
-                    <span style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--ace-brand)', fontFamily: 'var(--ace-font)' }}>
-                      View →
-                    </span>
-                  </div>
-                </div>
-              </Link>
-            );
-          })}
-        </div>
+        {/* ── Course grid ───────────────────────────────────── */}
+        <AnimatePresence mode="wait">
+          {currentCourses.length > 0 && (
+            <motion.div
+              key={`page-${safePage}-${activeCategory}-${query}`}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.18 }}
+              className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5"
+            >
+              {currentCourses.map((course, i) => (
+                <CourseCard key={course.id} course={course} index={i} />
+              ))}
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* ── Pagination ───────────────────────────────────── */}
+        {totalPages > 1 && (
+          <Pagination
+            currentPage={safePage}
+            totalPages={totalPages}
+            onPageChange={handlePageChange}
+          />
+        )}
       </div>
     </div>
   );
