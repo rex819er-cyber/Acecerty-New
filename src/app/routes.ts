@@ -13,6 +13,8 @@ import PracticeExamsPage from './pages/PracticeExamsPage';
 import ExamInterfacePage from './pages/ExamInterfacePage';
 import HostACoursePage from './pages/HostACoursePage';
 import StudentDashboardPage from './pages/StudentDashboardPage';
+import MentorshipPage from './pages/MentorshipPage';
+import InternshipPage from './pages/InternshipPage';
 
 export const router = createBrowserRouter([
   {
@@ -28,6 +30,8 @@ export const router = createBrowserRouter([
       { path: 'practice-exams', Component: PracticeExamsPage },
       { path: 'practice-exams/:id', Component: ExamInterfacePage },
       { path: 'host-a-course', Component: HostACoursePage },
+      { path: 'mentorship', Component: MentorshipPage },
+      { path: 'internship', Component: InternshipPage },
       { path: 'login', Component: LoginPage },
       { path: 'cart', Component: CartPage },
       { path: 'checkout', Component: CheckoutPage },
