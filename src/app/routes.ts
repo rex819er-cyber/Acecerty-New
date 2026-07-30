@@ -15,8 +15,10 @@ import HostACoursePage from './pages/HostACoursePage';
 import StudentDashboardPage from './pages/StudentDashboardPage';
 import MentorshipPage from './pages/MentorshipPage';
 import InternshipPage from './pages/InternshipPage';
+import AdminDashboard from './pages/AdminDashboard';
 
 export const router = createBrowserRouter([
+  { path: '/admin', Component: AdminDashboard },
   {
     path: '/',
     Component: Root,

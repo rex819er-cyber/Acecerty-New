@@ -1,9 +1,10 @@
 /* ─────────────────────────────────────────────────────────────────────────
-   Acecerty API Client
-   Base URL: https://acecerty-backend.onrender.com/api
-   - Automatically attaches bearer token from localStorage
-   - Handles Render cold-start delays gracefully (15s timeout)
-   - All public API responses are typed; falls back to mock data on failure
+   Acecerty — centralised API client
+   Base: https://acecerty-backend.onrender.com/api
+   • Bearer token auto-injected from localStorage 'ace_token'
+   • 15 s AbortController timeout (Render cold-start safe)
+   • upload() for multipart/form-data
+   • useApi<T> hook with 2 500 ms slowConnection indicator
 ───────────────────────────────────────────────────────────────────────── */
 
 export const API_BASE = 'https://acecerty-backend.onrender.com/api';
@@ -13,206 +14,235 @@ const TOKEN_KEY = 'ace_token';
 export function getStoredToken(): string | null {
   try { return localStorage.getItem(TOKEN_KEY); } catch { return null; }
 }
-export function storeToken(token: string) {
-  try { localStorage.setItem(TOKEN_KEY, token); } catch {}
+export function storeToken(t: string) {
+  try { localStorage.setItem(TOKEN_KEY, t); } catch {}
 }
 export function clearToken() {
   try { localStorage.removeItem(TOKEN_KEY); } catch {}
 }
 
-/* ── Core fetch wrapper ────────────────────────────────────────────────── */
+/* ── core fetch ────────────────────────────────────────────────────────── */
 
 export type ApiError = { message: string; status?: number; isTimeout?: boolean };
 
 async function request<T>(
   endpoint: string,
   options: RequestInit = {},
-  timeoutMs = 15000,
+  ms = 15_000,
 ): Promise<T> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), ms);
   const token = getStoredToken();
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
     ...(options.headers as Record<string, string> ?? {}),
   };
-
   try {
     const res = await fetch(`${API_BASE}${endpoint}`, {
-      ...options,
-      headers,
-      signal: controller.signal,
+      ...options, headers, signal: ctrl.signal,
     });
     clearTimeout(timer);
-    if (!res.ok) {
-      const err: ApiError = { message: `API ${res.status}`, status: res.status };
-      throw err;
-    }
+    if (!res.ok) throw { message: `API ${res.status}`, status: res.status } as ApiError;
     return (await res.json()) as T;
   } catch (err: any) {
     clearTimeout(timer);
-    if (err.name === 'AbortError') {
-      const out: ApiError = { message: 'Request timed out — server may be waking up', isTimeout: true };
-      throw out;
-    }
+    if (err.name === 'AbortError')
+      throw { message: 'Request timed out — server may be waking up', isTimeout: true } as ApiError;
     throw err as ApiError;
   }
 }
 
-/* ── Type definitions ──────────────────────────────────────────────────── */
-
-export interface ApiCourse {
-  id: string;
-  title: string;
-  description: string;
-  image?: string;
-  duration?: string;
-  videos?: string;
-  questions?: string;
-  category?: string;
-  price?: number;
-  format?: string;
-  level?: string;
+export async function upload<T>(endpoint: string, fd: FormData): Promise<T> {
+  const token = getStoredToken();
+  const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+  const res = await fetch(`${API_BASE}${endpoint}`, { method: 'POST', headers, body: fd });
+  if (!res.ok) throw { message: `Upload ${res.status}`, status: res.status } as ApiError;
+  return (await res.json()) as T;
 }
 
+/* ── public types ──────────────────────────────────────────────────────── */
+
+export interface ApiLesson {
+  id: string; title: string; duration?: string;
+  type?: 'video' | 'reading' | 'quiz'; order?: number;
+}
 export interface ApiModule {
-  id: string;
-  title: string;
-  duration?: string;
-  lessons: string[];
-  order?: number;
+  id: string; title: string; duration?: string;
+  lessons: ApiLesson[]; order?: number;
 }
-
-export interface ApiUser {
-  id: string;
-  name: string;
-  email: string;
-  role: string;
+export interface ApiCourse {
+  id: string; title: string; description: string;
+  image?: string; duration?: string; videos?: string; questions?: string;
+  category?: string; price?: number; originalPrice?: number;
+  format?: string; level?: string; slug?: string;
+  modules?: ApiModule[];
+  instructor?: { name: string; title: string; bio: string; rating: number; students: number; reviews: number };
+  outcomes?: string[]; requirements?: string[];
+  rating?: number; reviews?: number; students?: number;
+  certificate?: boolean; lastUpdated?: string; highlights?: string[];
 }
-
-/* ── Auth ──────────────────────────────────────────────────────────────── */
-
-export async function apiLogin(email: string, password: string): Promise<{ token: string; user: ApiUser }> {
-  return request('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) });
-}
-
-export async function apiRegister(name: string, email: string, password: string): Promise<{ token: string; user: ApiUser }> {
-  return request('/auth/register', { method: 'POST', body: JSON.stringify({ name, email, password }) });
-}
-
-export async function apiGetMe(): Promise<ApiUser> {
-  return request('/auth/me');
-}
-
-/* ── Courses ───────────────────────────────────────────────────────────── */
+export interface ApiUser { id: string; name: string; email: string; role: string }
 
 export interface CourseQueryParams {
-  format?: string;
-  level?: string;
-  category?: string;
-  search?: string;
-  page?: number;
-  limit?: number;
+  format?: string; level?: string; category?: string;
+  search?: string; page?: number; limit?: number;
 }
 
-export async function apiGetCourses(params?: CourseQueryParams): Promise<ApiCourse[]> {
-  const q = params ? '?' + new URLSearchParams(
-    Object.fromEntries(Object.entries(params).filter(([, v]) => v !== undefined).map(([k, v]) => [k, String(v)]))
-  ).toString() : '';
+/* ── auth ──────────────────────────────────────────────────────────────── */
+
+export const apiLogin = (email: string, password: string) =>
+  request<{ token: string; user: ApiUser }>('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) });
+
+export const apiRegister = (name: string, email: string, password: string) =>
+  request<{ token: string; user: ApiUser }>('/auth/register', { method: 'POST', body: JSON.stringify({ name, email, password }) });
+
+export const apiGetMe = () => request<ApiUser>('/me');
+
+/* ── courses (public) ──────────────────────────────────────────────────── */
+
+export const apiGetCourses = (params?: CourseQueryParams) => {
+  const q = params
+    ? '?' + new URLSearchParams(Object.fromEntries(Object.entries(params).filter(([, v]) => v !== undefined).map(([k, v]) => [k, String(v)])))
+    : '';
   return request<ApiCourse[]>(`/courses${q}`);
+};
+export const apiGetCourse = (id: string) => request<ApiCourse>(`/courses/${id}`);
+export const apiGetCourseModules = (id: string) => request<ApiModule[]>(`/courses/${id}/modules`);
+
+/* ── student ───────────────────────────────────────────────────────────── */
+
+export interface StudentProgress { courseId: string; completedLessons: string[]; percentComplete: number }
+export interface Certificate { id: string; courseTitle: string; issuedAt: string; url?: string }
+export interface StudentDashboard {
+  enrolledCourses: number; completedCourses: number; certificates: number;
+  recentActivity: { courseId: string; title: string; progress: number }[];
 }
 
-export async function apiGetCourse(id: string): Promise<ApiCourse> {
-  return request<ApiCourse>(`/courses/${id}`);
+export const apiGetStudentDashboard = () => request<StudentDashboard>('/me/dashboard');
+export const apiGetCourseProgress = (courseId: string) => request<StudentProgress>(`/me/courses/${courseId}/progress`);
+export const apiGetCertificates = () => request<Certificate[]>('/me/certificates');
+
+/* ── cart ──────────────────────────────────────────────────────────────── */
+
+export interface CartItem { courseId: string; price: number; title?: string }
+export interface Cart { items: CartItem[]; total: number }
+
+export const apiGetCart = () => request<Cart>('/cart');
+export const apiAddToCart = (courseId: string, price: number) =>
+  request<Cart>('/cart/items', { method: 'POST', body: JSON.stringify({ courseId, price }) });
+export const apiUpdateCart = (items: CartItem[]) =>
+  request<Cart>('/cart', { method: 'PUT', body: JSON.stringify({ items }) });
+
+/* ── orders & payments ─────────────────────────────────────────────────── */
+
+export interface Order { id: string; total: number; status: string; createdAt: string; items: CartItem[] }
+export interface PaymentResult { success: boolean; paymentUrl?: string; reference?: string }
+
+export const apiCreateOrder = () => request<Order>('/orders', { method: 'POST' });
+export const apiPayOrder = (orderId: string, method: string) =>
+  request<PaymentResult>(`/orders/${orderId}/pay`, { method: 'POST', body: JSON.stringify({ method }) });
+
+/* ── exam engine (public) ──────────────────────────────────────────────── */
+
+export interface ExamProduct { id: string; title: string; questions: number; duration: number; price: number; category?: string }
+export interface ExamAttempt { id: string; examId: string; questions: { id: string; text: string; options: string[] }[] }
+
+export const apiGetExamProducts = () => request<ExamProduct[]>('/exam-products');
+export const apiStartExamAttempt = (examId: string) =>
+  request<ExamAttempt>(`/exams/${examId}/attempts`, { method: 'POST' });
+
+/* ── mentorship ────────────────────────────────────────────────────────── */
+
+export interface ApiMentor { id: string; name: string; title: string; specialties: string[]; bio: string; avatar?: string; rating?: number; sessions?: number }
+
+export const apiGetMentors = () => request<ApiMentor[]>('/mentors');
+export const apiBookSession = (mentorId: string, date: string, message: string) =>
+  request<{ success: boolean }>('/mentors/sessions', { method: 'POST', body: JSON.stringify({ mentorId, date, message }) });
+
+/* ── internship ────────────────────────────────────────────────────────── */
+
+export interface ApiInternshipTrack { id: string; title: string; description: string; duration: string; spots: number; requirements: string[] }
+
+export const apiGetInternshipTracks = () => request<ApiInternshipTrack[]>('/internships');
+export const apiApplyInternship = (data: { name: string; email: string; phone: string; trackId: string; statement: string }) =>
+  request<{ success: boolean; applicationId?: string }>('/internships/apply', { method: 'POST', body: JSON.stringify(data) });
+
+/* ── admin types ───────────────────────────────────────────────────────── */
+
+export interface AdminCourse { id: string; title: string; description: string; category?: string; level?: string; format?: string; price?: number; published?: boolean; image?: string; slug?: string; createdAt?: string }
+export interface AdminModule { id: string; courseId: string; title: string; order?: number; duration?: string }
+export interface AdminLesson { id: string; moduleId: string; title: string; type?: string; order?: number; duration?: string; videoUrl?: string }
+export interface AdminExamProduct { id: string; title: string; questions: number; duration: number; price: number; published?: boolean }
+export interface AdminQuestion { id: string; examId: string; text: string; options: string[]; correctIndex: number; explanation?: string }
+export interface ProductPrice { id: string; courseId: string; region: string; currency: string; amount: number }
+export interface AdminOrder { id: string; userId: string; total: number; status: string; createdAt: string; items: { courseId: string; price: number }[] }
+export interface AdminPayment { id: string; orderId: string; amount: number; method: string; status: string; createdAt: string; reference?: string }
+export interface AdminLead { id: string; name: string; email: string; phone?: string; source?: string; createdAt: string }
+export interface AdminAuditLog { id: string; userId: string; action: string; resource: string; createdAt: string; meta?: Record<string, unknown> }
+export interface AdminStats {
+  totalRevenue: number; totalOrders: number; totalStudents: number; totalCourses: number;
+  revenueByMonth: { month: string; revenue: number }[];
+  ordersByStatus: { status: string; count: number }[];
 }
 
-export async function apiGetCourseModules(courseId: string): Promise<ApiModule[]> {
-  return request<ApiModule[]>(`/courses/${courseId}/modules`);
-}
+/* ── admin functions ───────────────────────────────────────────────────── */
 
-/* ── Mentorship ────────────────────────────────────────────────────────── */
+export const adminGetStats = () => request<AdminStats>('/admin/dashboard/stats');
 
-export interface ApiMentor {
-  id: string;
-  name: string;
-  title: string;
-  specialties: string[];
-  bio: string;
-  avatar?: string;
-  rating?: number;
-  sessions?: number;
-}
+export const adminGetCourses = () => request<AdminCourse[]>('/admin/courses');
+export const adminCreateCourse = (d: Partial<AdminCourse>) => request<AdminCourse>('/admin/courses', { method: 'POST', body: JSON.stringify(d) });
+export const adminUpdateCourse = (id: string, d: Partial<AdminCourse>) => request<AdminCourse>(`/admin/courses/${id}`, { method: 'PATCH', body: JSON.stringify(d) });
+export const adminPublishCourse = (id: string, published: boolean) => request<AdminCourse>(`/admin/courses/${id}/publish`, { method: 'PATCH', body: JSON.stringify({ published }) });
+export const adminUploadImage = async (file: File) => { const fd = new FormData(); fd.append('file', file); return upload<{ url: string }>('/admin/uploads', fd); };
 
-export async function apiGetMentors(): Promise<ApiMentor[]> {
-  return request<ApiMentor[]>('/mentors');
-}
+export const adminGetPrices = () => request<ProductPrice[]>('/admin/product-prices');
+export const adminUpdatePrice = (id: string, amount: number) => request<ProductPrice>(`/admin/product-prices/${id}`, { method: 'PUT', body: JSON.stringify({ amount }) });
+export const adminDeletePrice = (id: string) => request<void>(`/admin/product-prices/${id}`, { method: 'DELETE' });
+export const adminAddPrice = (d: Omit<ProductPrice, 'id'>) => request<ProductPrice>('/admin/product-prices', { method: 'POST', body: JSON.stringify(d) });
 
-export async function apiBookSession(mentorId: string, date: string, message: string): Promise<{ success: boolean }> {
-  return request('/mentors/sessions', { method: 'POST', body: JSON.stringify({ mentorId, date, message }) });
-}
+export const adminAddModule = (courseId: string, d: Partial<AdminModule>) => request<AdminModule>(`/admin/courses/${courseId}/modules`, { method: 'POST', body: JSON.stringify(d) });
+export const adminUpdateModule = (id: string, d: Partial<AdminModule>) => request<AdminModule>(`/admin/modules/${id}`, { method: 'PATCH', body: JSON.stringify(d) });
+export const adminDeleteModule = (id: string) => request<void>(`/admin/modules/${id}`, { method: 'DELETE' });
+export const adminAddLesson = (moduleId: string, d: Partial<AdminLesson>) => request<AdminLesson>(`/admin/modules/${moduleId}/lessons`, { method: 'POST', body: JSON.stringify(d) });
+export const adminUpdateLesson = (id: string, d: Partial<AdminLesson>) => request<AdminLesson>(`/admin/lessons/${id}`, { method: 'PATCH', body: JSON.stringify(d) });
 
-/* ── Internship ────────────────────────────────────────────────────────── */
+export const adminGetExams = () => request<AdminExamProduct[]>('/admin/exams');
+export const adminCreateExam = (d: Partial<AdminExamProduct>) => request<AdminExamProduct>('/admin/exams', { method: 'POST', body: JSON.stringify(d) });
+export const adminPublishExam = (id: string, published: boolean) => request<AdminExamProduct>(`/admin/exams/${id}/publish`, { method: 'PATCH', body: JSON.stringify({ published }) });
+export const adminGetQuestions = (examId: string) => request<AdminQuestion[]>(`/admin/exams/${examId}/questions`);
+export const adminCreateQuestion = (d: Partial<AdminQuestion>) => request<AdminQuestion>('/admin/questions', { method: 'POST', body: JSON.stringify(d) });
+export const adminUpdateQuestion = (id: string, d: Partial<AdminQuestion>) => request<AdminQuestion>(`/admin/questions/${id}`, { method: 'PATCH', body: JSON.stringify(d) });
+export const adminImportQuestions = (examId: string, csv: string) => request<{ imported: number }>(`/admin/exams/${examId}/questions/import`, { method: 'POST', body: JSON.stringify({ csv }) });
 
-export interface ApiInternshipTrack {
-  id: string;
-  title: string;
-  description: string;
-  duration: string;
-  spots: number;
-  requirements: string[];
-}
+export const adminGetOrders = (page = 1) => request<{ orders: AdminOrder[]; total: number }>(`/admin/orders?page=${page}`);
+export const adminGetPayments = (page = 1) => request<{ payments: AdminPayment[]; total: number }>(`/admin/payments?page=${page}`);
+export const adminGetLeads = (page = 1) => request<{ leads: AdminLead[]; total: number }>(`/admin/leads?page=${page}`);
+export const adminGetAuditLogs = (page = 1) => request<{ logs: AdminAuditLog[]; total: number }>(`/admin/audit-logs?page=${page}`);
 
-export async function apiGetInternshipTracks(): Promise<ApiInternshipTrack[]> {
-  return request<ApiInternshipTrack[]>('/internships');
-}
-
-export async function apiApplyInternship(data: {
-  name: string; email: string; phone: string; trackId: string; statement: string;
-}): Promise<{ success: boolean; applicationId?: string }> {
-  return request('/internships/apply', { method: 'POST', body: JSON.stringify(data) });
-}
-
-/* ── React hook: useApi ────────────────────────────────────────────────── */
+/* ── useApi hook ───────────────────────────────────────────────────────── */
 
 import { useState, useEffect, useCallback } from 'react';
 
 export type UseApiState<T> = {
-  data: T | null;
-  loading: boolean;
-  error: string | null;
-  slowConnection: boolean;
-  refetch: () => void;
+  data: T | null; loading: boolean; error: string | null;
+  slowConnection: boolean; refetch: () => void;
 };
 
-export function useApi<T>(
-  fetcher: () => Promise<T>,
-  deps: unknown[] = [],
-): UseApiState<T> {
+export function useApi<T>(fetcher: () => Promise<T>, deps: unknown[] = []): UseApiState<T> {
   const [data, setData] = useState<T | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [slowConnection, setSlowConnection] = useState(false);
 
   const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    setSlowConnection(false);
-    const slowTimer = setTimeout(() => setSlowConnection(true), 2500);
-    try {
-      const result = await fetcher();
-      setData(result);
-    } catch (err: any) {
-      setError(err?.message ?? 'Failed to load');
-    } finally {
-      clearTimeout(slowTimer);
-      setSlowConnection(false);
-      setLoading(false);
-    }
+    setLoading(true); setError(null); setSlowConnection(false);
+    const slow = setTimeout(() => setSlowConnection(true), 2500);
+    try { setData(await fetcher()); }
+    catch (e: any) { setError(e?.message ?? 'Failed to load'); }
+    finally { clearTimeout(slow); setSlowConnection(false); setLoading(false); }
   }, deps); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { load(); }, [load]);
-
   return { data, loading, error, slowConnection, refetch: load };
 }
