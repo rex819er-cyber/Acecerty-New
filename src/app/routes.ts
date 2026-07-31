@@ -18,26 +18,30 @@ import InternshipPage from './pages/InternshipPage';
 import AdminDashboard from './pages/AdminDashboard';
 
 export const router = createBrowserRouter([
-  { path: '/admin', Component: AdminDashboard },
+  /* Standalone admin portal — completely outside Root layout & auth */
+  { path: '/admin',       Component: AdminDashboard },
+  { path: '/admin/login', Component: AdminDashboard },
+
+  /* Main student app */
   {
     path: '/',
     Component: Root,
     children: [
-      { index: true, Component: HomePage },
-      { path: 'courses', Component: CourseCatalog },
-      { path: 'courses/:id', Component: CourseDetailPage },
-      { path: 'exam-vouchers', Component: ExamVouchersPage },
-      { path: 'training', Component: TrainingPage },
-      { path: 'faq', Component: FAQPage },
-      { path: 'practice-exams', Component: PracticeExamsPage },
-      { path: 'practice-exams/:id', Component: ExamInterfacePage },
-      { path: 'host-a-course', Component: HostACoursePage },
-      { path: 'mentorship', Component: MentorshipPage },
-      { path: 'internship', Component: InternshipPage },
-      { path: 'login', Component: LoginPage },
-      { path: 'cart', Component: CartPage },
-      { path: 'checkout', Component: CheckoutPage },
-      { path: 'dashboard', Component: StudentDashboardPage },
+      { index: true,                    Component: HomePage            },
+      { path: 'courses',                Component: CourseCatalog       },
+      { path: 'courses/:id',            Component: CourseDetailPage    },
+      { path: 'exam-vouchers',          Component: ExamVouchersPage    },
+      { path: 'training',               Component: TrainingPage        },
+      { path: 'faq',                    Component: FAQPage             },
+      { path: 'practice-exams',         Component: PracticeExamsPage   },
+      { path: 'practice-exams/:id',     Component: ExamInterfacePage   },
+      { path: 'host-a-course',          Component: HostACoursePage     },
+      { path: 'mentorship',             Component: MentorshipPage      },
+      { path: 'internship',             Component: InternshipPage      },
+      { path: 'login',                  Component: LoginPage           },
+      { path: 'cart',                   Component: CartPage            },
+      { path: 'checkout',               Component: CheckoutPage        },
+      { path: 'dashboard',              Component: StudentDashboardPage },
     ],
   },
 ]);
