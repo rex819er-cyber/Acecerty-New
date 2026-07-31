@@ -41,11 +41,12 @@ async function request<T>(endpoint: string, options: RequestInit = {}, ms = 60_0
   const token = tokenFor(endpoint);
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
+    'Accept': 'application/json',
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
     ...(options.headers as Record<string, string> ?? {}),
   };
   try {
-    const res = await fetch(`${API_BASE}${endpoint}`, { ...options, headers, signal: ctrl.signal });
+    const res = await fetch(`${API_BASE}${endpoint}`, { ...options, headers, signal: ctrl.signal, mode: 'cors' });
     clearTimeout(timer);
     if (!res.ok) {
       let msg = `API ${res.status}`;

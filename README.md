@@ -1,7 +1,7 @@
 
-  # Redesign for Acecerty LMS site
+  # Acecerty
 
-  This is a code bundle for Redesign for Acecerty LMS site. The original project is available at https://www.figma.com/design/cQfx8Zp2oqiOEBlAxeuCpT/Redesign-for-Acecerty-LMS-site.
+  This is a code bundle for Acecerty. The original project is available at https://www.figma.com/design/cQfx8Zp2oqiOEBlAxeuCpT/Acecerty.
 
   ## Running the code
 
