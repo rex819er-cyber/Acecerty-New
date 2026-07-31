@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate, useLocation } from 'react-router';
 import {
   LayoutDashboard, BookOpen, DollarSign, Layers, ClipboardList,
   ShoppingCart, CreditCard, Users, FileText, LogOut, Menu, X,
   Plus, Edit2, Trash2, Upload, Eye, EyeOff, ChevronDown, ChevronUp,
-  Wifi, AlertCircle, CheckCircle2, Save, Key, RefreshCw,
+  Wifi, AlertCircle, CheckCircle2, Save, ShieldAlert, RefreshCw,
 } from 'lucide-react';
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import {
@@ -19,8 +20,9 @@ import type {
   AdminOrder, AdminPayment, AdminLead, AdminAuditLog, AdminModule,
 } from '../lib/api';
 
-/* ── The single admin secret key (front-end gate) ─────────────────────── */
-const ADMIN_SECRET = 'ACECERTY-ADMIN-2025';
+/* ── Authorised admin credentials (front-end gate) ────────────────────── */
+const ADMIN_EMAIL    = 'admin@acecerty.com';
+const ADMIN_PASSWORD = 'Acecerty.admin.access';
 
 type Section = 'overview'|'courses'|'prices'|'modules'|'exams'|'orders'|'payments'|'leads'|'audit';
 
@@ -668,103 +670,119 @@ function AuditSection() {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
-   ADMIN GATEWAY — dedicated login with Security Key field
+   ADMIN GATEWAY — strict credential check then API auth
 ═══════════════════════════════════════════════════════════════════════ */
 function AdminGateway({ onSuccess }: { onSuccess: () => void }) {
-  const [email, setEmail]     = useState('');
+  const [email, setEmail]       = useState('');
   const [password, setPassword] = useState('');
-  const [secKey, setSecKey]   = useState('');
-  const [showPw, setShowPw]   = useState(false);
-  const [showKey, setShowKey] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError]     = useState('');
-  const [slow, setSlow]       = useState(false);
+  const [showPw, setShowPw]     = useState(false);
+  const [loading, setLoading]   = useState(false);
+  const [error, setError]       = useState('');
+  const [slow, setSlow]         = useState(false);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (secKey !== ADMIN_SECRET) { setError('Invalid Admin Security Key.'); return; }
-    setLoading(true); setError(''); setSlow(false);
+    setError('');
+
+    /* ── Step 1: front-end credential gate ─────────────────── */
+    if (email.trim().toLowerCase() !== ADMIN_EMAIL || password !== ADMIN_PASSWORD) {
+      setError('Unauthorized access: Invalid admin email or password.');
+      return;
+    }
+
+    /* ── Step 2: fire live API auth ─────────────────────────── */
+    setLoading(true); setSlow(false);
     const t = setTimeout(() => setSlow(true), 2500);
     try {
-      const r = await apiLogin(email, password);
+      const r = await apiLogin(email.trim(), password);
       clearTimeout(t); setSlow(false);
-      if (r.user.role !== 'admin') throw new Error('Access denied — this account does not have admin privileges.');
+      if (r.user.role !== 'admin') {
+        throw new Error('Access denied — this account does not have admin privileges.');
+      }
       storeAdminToken(r.token);
       onSuccess();
     } catch (err: any) {
       clearTimeout(t); setSlow(false);
-      setError(err?.message ?? 'Login failed. Please check your credentials.');
+      setError(err?.message ?? 'Login failed. Please try again.');
     } finally { setLoading(false); }
   }
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--background)', fontFamily: 'var(--ace-font)', padding: 16 }}>
       <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 20, padding: '40px 36px', width: '100%', maxWidth: 420 }}>
+
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 28 }}>
           <div style={{ width: 44, height: 44, borderRadius: 12, background: 'var(--ace-brand)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
             <LayoutDashboard size={20} color="#fff" />
           </div>
           <div>
-            <div style={{ color: 'var(--foreground)', fontWeight: 800, fontSize: '1.1rem' }}>Acecerty Admin</div>
-            <div style={{ color: 'var(--muted-foreground)', fontSize: '0.75rem' }}>Secure admin gateway</div>
+            <div style={{ color: 'var(--foreground)', fontWeight: 800, fontSize: '1.1rem', fontFamily: 'var(--ace-font)' }}>Acecerty Admin</div>
+            <div style={{ color: 'var(--muted-foreground)', fontSize: '0.75rem', fontFamily: 'var(--ace-font)' }}>Restricted — authorised personnel only</div>
           </div>
         </div>
 
         {slow && <ColdBanner msg="Connecting to live backend — server may be waking up…" />}
 
         <form onSubmit={submit}>
-          {/* Email */}
           <Field label="Admin Email">
-            <input style={inp} type="email" value={email} onChange={e => setEmail(e.target.value)} required autoFocus placeholder="admin@acecerty.com" />
+            <input
+              style={inp}
+              type="email"
+              value={email}
+              onChange={e => { setEmail(e.target.value); setError(''); }}
+              required
+              autoFocus
+              autoComplete="username"
+              placeholder="admin@acecerty.com"
+            />
           </Field>
 
-          {/* Password */}
           <Field label="Password">
             <div style={{ position: 'relative' }}>
-              <input style={{ ...inp, paddingRight: 40 }} type={showPw ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)} required placeholder="••••••••" />
-              <button type="button" onClick={() => setShowPw(v => !v)} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted-foreground)' }}>
+              <input
+                style={{ ...inp, paddingRight: 40 }}
+                type={showPw ? 'text' : 'password'}
+                value={password}
+                onChange={e => { setPassword(e.target.value); setError(''); }}
+                required
+                autoComplete="current-password"
+                placeholder="••••••••"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPw(v => !v)}
+                style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted-foreground)' }}
+                aria-label={showPw ? 'Hide password' : 'Show password'}
+              >
                 {showPw ? <EyeOff size={15} /> : <Eye size={15} />}
               </button>
             </div>
           </Field>
 
-          {/* Admin Security Key */}
-          <Field label="Admin Security Key">
-            <div style={{ position: 'relative' }}>
-              <div style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--muted-foreground)' }}>
-                <Key size={14} />
-              </div>
-              <input
-                style={{ ...inp, paddingLeft: 32, paddingRight: 40, letterSpacing: showKey ? 'normal' : '0.2em' }}
-                type={showKey ? 'text' : 'password'}
-                value={secKey}
-                onChange={e => setSecKey(e.target.value)}
-                required
-                placeholder="Enter admin security key"
-              />
-              <button type="button" onClick={() => setShowKey(v => !v)} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted-foreground)' }}>
-                {showKey ? <EyeOff size={15} /> : <Eye size={15} />}
-              </button>
-            </div>
-          </Field>
-
           {error && (
-            <div style={{ color: '#ef4444', fontSize: '0.82rem', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.25)', borderRadius: 8, padding: '9px 12px' }}>
-              <AlertCircle size={13} className="shrink-0" /> {error}
+            <div style={{ color: 'var(--destructive)', fontSize: '0.82rem', marginBottom: 14, display: 'flex', alignItems: 'flex-start', gap: 7, background: 'rgba(212,24,61,0.08)', border: '1px solid rgba(212,24,61,0.25)', borderRadius: 8, padding: '10px 12px' }}>
+              <ShieldAlert size={14} style={{ flexShrink: 0, marginTop: 1 }} />
+              <span style={{ fontFamily: 'var(--ace-font)', lineHeight: 1.5 }}>{error}</span>
             </div>
           )}
 
-          <button type="submit" disabled={loading} style={{ width: '100%', padding: '12px 0', borderRadius: 10, border: 'none', background: 'var(--ace-brand)', color: '#fff', fontFamily: 'var(--ace-font)', fontWeight: 700, fontSize: '0.95rem', cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.7 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-            {loading ? <><span style={{ width: 16, height: 16, border: '2px solid #fff', borderTopColor: 'transparent', borderRadius: '50%', display: 'inline-block', animation: 'spin 0.7s linear infinite' }} /> Signing in…</> : 'Access Dashboard'}
+          <button
+            type="submit"
+            disabled={loading}
+            style={{ width: '100%', padding: '12px 0', borderRadius: 10, border: 'none', background: 'var(--ace-brand)', color: '#fff', fontFamily: 'var(--ace-font)', fontWeight: 700, fontSize: '0.95rem', cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.7 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 4 }}
+          >
+            {loading
+              ? <><span style={{ width: 16, height: 16, border: '2px solid #fff', borderTopColor: 'transparent', borderRadius: '50%', display: 'inline-block', animation: 'spin 0.7s linear infinite' }} /> Signing in…</>
+              : 'Access Dashboard'}
           </button>
         </form>
 
         <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
 
         <div style={{ marginTop: 20, padding: '12px 14px', background: 'rgba(0,162,182,0.06)', border: '1px solid var(--border)', borderRadius: 10 }}>
-          <div style={{ color: 'var(--muted-foreground)', fontSize: '0.75rem', fontFamily: 'var(--ace-font)', lineHeight: 1.6 }}>
-            🔐 This portal is restricted to authorised Acecerty administrators. Unauthorised access attempts are logged.
+          <div style={{ color: 'var(--muted-foreground)', fontSize: '0.74rem', fontFamily: 'var(--ace-font)', lineHeight: 1.6 }}>
+            This portal is restricted to authorised Acecerty administrators. Unauthorised access attempts are logged.
           </div>
         </div>
       </div>
@@ -788,6 +806,10 @@ const NAV_ITEMS: { key: Section; label: string; icon: React.ReactNode }[] = [
 ];
 
 export default function AdminDashboard() {
+  const navigate  = useNavigate();
+  const location  = useLocation();
+  const isLoginRoute = location.pathname === '/admin/login';
+
   const [authed, setAuthed]     = useState(() => !!getAdminToken());
   const [section, setSection]   = useState<Section>('overview');
   const [sideOpen, setSideOpen] = useState(false);
@@ -797,9 +819,30 @@ export default function AdminDashboard() {
     return () => document.documentElement.classList.remove('dark');
   }, []);
 
-  function logout() { clearAdminToken(); setAuthed(false); }
+  /* ── Route guard ────────────────────────────────────────────────────── */
+  useEffect(() => {
+    if (!authed && !isLoginRoute) {
+      /* Unauthenticated visit to /admin → send to login */
+      navigate('/admin/login', { replace: true });
+    }
+    if (authed && isLoginRoute) {
+      /* Already authed but on login page → send to dashboard */
+      navigate('/admin', { replace: true });
+    }
+  }, [authed, isLoginRoute, navigate]);
 
-  if (!authed) return <AdminGateway onSuccess={() => setAuthed(true)} />;
+  function handleLoginSuccess() {
+    setAuthed(true);
+    navigate('/admin', { replace: true });
+  }
+
+  function logout() {
+    clearAdminToken();
+    setAuthed(false);
+    navigate('/admin/login', { replace: true });
+  }
+
+  if (!authed) return <AdminGateway onSuccess={handleLoginSuccess} />;
 
   const SECTION_MAP: Record<Section, React.ReactNode> = {
     overview:  <OverviewSection />,
