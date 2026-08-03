@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router';
 import { Shield, Lock, ChevronRight, CheckCircle2, AlertCircle, CreditCard, Smartphone, X, Wifi, ExternalLink } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useCart } from '../context/CartContext';
+import { useAuth } from '../context/AuthContext';
 import { apiCreateOrder, apiPayOrder, apiGetEntitlements } from '../lib/api';
 
 type PayMethod = 'card' | 'paystack' | 'flutterwave';
@@ -60,6 +61,7 @@ function InputField({ label, type = 'text', placeholder, value, onChange, error,
 
 export default function CheckoutPage() {
   const { items, subtotal, removeFromCart, clearCart } = useCart();
+  const { isAuthenticated } = useAuth();
   const navigate = useNavigate();
 
   const [payMethod, setPayMethod] = useState<PayMethod>('paystack');
@@ -99,6 +101,10 @@ export default function CheckoutPage() {
   }
 
   async function handlePay() {
+    if (!isAuthenticated) {
+      navigate('/login', { state: { returnTo: '/checkout' } });
+      return;
+    }
     if (!validateCard()) return;
     setLoading(true); setApiError(''); setSlowConn(false);
     const slowTimer = setTimeout(() => setSlowConn(true), 2500);

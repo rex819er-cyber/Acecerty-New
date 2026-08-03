@@ -81,14 +81,14 @@ export interface ApiCourse {
   outcomes?: string[]; requirements?: string[]; rating?: number; reviews?: number; students?: number;
   certificate?: boolean; lastUpdated?: string; highlights?: string[];
 }
-export interface ApiUser { id: string; name: string; email: string; role: string }
+export interface ApiUser { id: string; fullName: string; name?: string; email: string; role: string }
 export interface CourseQueryParams { format?: string; level?: string; category?: string; search?: string; page?: number; limit?: number }
 
 /* ── auth ──────────────────────────────────────────────────────────────── */
 export const apiLogin = (email: string, password: string) =>
   request<{ token: string; user: ApiUser }>('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) });
-export const apiRegister = (name: string, email: string, password: string) =>
-  request<{ token: string; user: ApiUser }>('/auth/register', { method: 'POST', body: JSON.stringify({ name, email, password }) });
+export const apiRegister = (fullName: string, email: string, password: string) =>
+  request<{ token: string; user: ApiUser }>('/auth/register', { method: 'POST', body: JSON.stringify({ fullName, email, password }) });
 export const apiGetMe = () => request<ApiUser>('/me');
 
 /* ── courses ───────────────────────────────────────────────────────────── */

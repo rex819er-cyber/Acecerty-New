@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Search, ShoppingCart, X, ChevronDown, GraduationCap, Briefcase } from 'lucide-react';
-import { Link, useLocation } from 'react-router';
+import { Search, ShoppingCart, X, ChevronDown, GraduationCap, Briefcase, LogOut, LayoutDashboard, Shield } from 'lucide-react';
+import { Link, useLocation, useNavigate } from 'react-router';
 import { motion, AnimatePresence } from 'motion/react';
 import { useCart } from '../context/CartContext';
 import { useTheme } from '../context/ThemeContext';
+import { useAuth } from '../context/AuthContext';
 import { AcecertyLogo } from './AcecertyLogo';
+import type { ApiUser } from '../lib/api';
 
 /* ─── Nav structure ──────────────────────────────────────────────────── */
 
@@ -239,6 +241,117 @@ function ThemeToggle() {
   );
 }
 
+/* ─── User profile dropdown ─────────────────────────────────────────── */
+
+function UserMenu({ user, logout }: { user: ApiUser; logout: () => void }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const navigate = useNavigate();
+
+  const displayName = user.fullName ?? user.name ?? user.email.split('@')[0];
+  const initials    = displayName.split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase();
+  const isAdmin     = user.role === 'admin';
+
+  useEffect(() => {
+    function handler(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const menuItemBase: React.CSSProperties = {
+    width: '100%', padding: '8px 10px', borderRadius: 8, border: 'none',
+    cursor: 'pointer', background: 'transparent', textAlign: 'left',
+    fontFamily: 'var(--ace-font)', fontSize: '0.83rem', fontWeight: 500,
+    display: 'flex', alignItems: 'center', gap: 8,
+  };
+
+  return (
+    <div ref={ref} className="relative ml-1" style={{ flexShrink: 0 }}>
+      <button
+        onClick={() => setOpen(v => !v)}
+        className="flex items-center gap-2 rounded-full transition-all"
+        style={{
+          padding: '5px 10px 5px 5px',
+          background: 'var(--muted)', border: '1px solid var(--border)',
+          fontFamily: 'var(--ace-font)', cursor: 'pointer',
+        }}
+      >
+        {/* Avatar */}
+        <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--ace-brand)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <span style={{ color: '#fff', fontSize: '0.68rem', fontWeight: 800, letterSpacing: '0.02em' }}>{initials}</span>
+        </div>
+        <span style={{ fontSize: '0.82rem', fontWeight: 600, color: 'var(--foreground)', maxWidth: 96, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {displayName.split(' ')[0]}
+        </span>
+        <ChevronDown
+          className="h-3 w-3 transition-transform"
+          style={{ color: 'var(--muted-foreground)', transform: open ? 'rotate(180deg)' : 'rotate(0deg)' }}
+        />
+      </button>
+
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ opacity: 0, y: 6, scale: 0.97 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 4, scale: 0.97 }}
+            transition={{ duration: 0.15, ease: [0.22, 1, 0.36, 1] }}
+            style={{
+              position: 'absolute', top: 'calc(100% + 8px)', right: 0, minWidth: 196,
+              background: 'var(--card)', border: '1px solid var(--border)',
+              borderRadius: 14, boxShadow: '0 16px 48px rgba(0,0,0,0.22)', zIndex: 200, overflow: 'hidden',
+            }}
+          >
+            {/* Identity row */}
+            <div style={{ padding: '12px 14px 10px', borderBottom: '1px solid var(--border)' }}>
+              <div style={{ fontSize: '0.83rem', fontWeight: 700, color: 'var(--foreground)', fontFamily: 'var(--ace-font)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{displayName}</div>
+              <div style={{ fontSize: '0.73rem', color: 'var(--muted-foreground)', fontFamily: 'var(--ace-font)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{user.email}</div>
+            </div>
+
+            <div style={{ padding: 6 }}>
+              <button
+                style={{ ...menuItemBase, color: 'var(--foreground)' }}
+                onClick={() => { navigate('/dashboard'); setOpen(false); }}
+                onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'var(--muted)'}
+                onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}
+              >
+                <LayoutDashboard style={{ width: 14, height: 14, color: 'var(--muted-foreground)', flexShrink: 0 }} />
+                My Dashboard
+              </button>
+
+              {isAdmin && (
+                <button
+                  style={{ ...menuItemBase, color: 'var(--ace-brand)' }}
+                  onClick={() => { navigate('/admin'); setOpen(false); }}
+                  onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'var(--muted)'}
+                  onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}
+                >
+                  <Shield style={{ width: 14, height: 14, flexShrink: 0 }} />
+                  Admin Portal
+                </button>
+              )}
+
+              <div style={{ height: 1, background: 'var(--border)', margin: '4px 0' }} />
+
+              <button
+                style={{ ...menuItemBase, color: 'var(--destructive)' }}
+                onClick={() => { logout(); setOpen(false); }}
+                onMouseEnter={e => (e.currentTarget as HTMLElement).style.background = 'rgba(212,24,61,0.07)'}
+                onMouseLeave={e => (e.currentTarget as HTMLElement).style.background = 'transparent'}
+              >
+                <LogOut style={{ width: 14, height: 14, flexShrink: 0 }} />
+                Sign Out
+              </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
 /* ─── Main Header ───────────────────────────────────────────────────── */
 
 export function Header() {
@@ -249,6 +362,7 @@ export function Header() {
   const [searchQuery, setSearchQuery] = useState('');
   const { itemCount, openCart } = useCart();
   const { isDark } = useTheme();
+  const { isAuthenticated, user, logout } = useAuth();
   const location = useLocation();
   const searchRef = useRef<HTMLInputElement>(null);
 
@@ -378,14 +492,19 @@ export function Header() {
                 </AnimatePresence>
               </motion.button>
 
-              <Link to="/login"
-                className="inline-flex items-center px-5 py-2 rounded-full text-sm font-semibold transition-all duration-200 active:scale-95 ml-1"
-                style={{ color: '#FFFFFF', background: '#00A2B6', boxShadow: '0 2px 12px rgba(0,162,182,0.30)', fontFamily: 'var(--ace-font)' }}
-                onMouseEnter={e => Object.assign((e.currentTarget as HTMLElement).style, { background: '#008fa0' })}
-                onMouseLeave={e => Object.assign((e.currentTarget as HTMLElement).style, { background: '#00A2B6' })}
-              >
-                Login
-              </Link>
+              {isAuthenticated && user
+                ? <UserMenu user={user} logout={logout} />
+                : (
+                  <Link to="/login"
+                    className="inline-flex items-center px-5 py-2 rounded-full text-sm font-semibold transition-all duration-200 active:scale-95 ml-1"
+                    style={{ color: '#FFFFFF', background: '#00A2B6', boxShadow: '0 2px 12px rgba(0,162,182,0.30)', fontFamily: 'var(--ace-font)' }}
+                    onMouseEnter={e => Object.assign((e.currentTarget as HTMLElement).style, { background: '#008fa0' })}
+                    onMouseLeave={e => Object.assign((e.currentTarget as HTMLElement).style, { background: '#00A2B6' })}
+                  >
+                    Login
+                  </Link>
+                )
+              }
             </div>
 
             {/* Mobile icons */}
@@ -513,11 +632,46 @@ export function Header() {
 
                   <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: NAV.length * 0.04 + 0.05 }} className="pt-3 pb-1">
-                    <Link to="/login"
-                      className="block py-3 px-4 rounded-full text-sm font-bold text-white text-center active:scale-[0.97]"
-                      style={{ backgroundColor: '#00A2B6', fontFamily: 'var(--ace-font)' }}>
-                      Login
-                    </Link>
+                    {isAuthenticated && user ? (
+                      <div style={{ borderTop: '1px solid var(--border)', paddingTop: 10 }}>
+                        {/* Identity */}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 10px 12px', fontFamily: 'var(--ace-font)' }}>
+                          <div style={{ width: 34, height: 34, borderRadius: '50%', background: 'var(--ace-brand)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                            <span style={{ color: '#fff', fontSize: '0.72rem', fontWeight: 800 }}>
+                              {(user.fullName ?? user.name ?? user.email).split(' ').map((w: string) => w[0]).join('').slice(0, 2).toUpperCase()}
+                            </span>
+                          </div>
+                          <div>
+                            <div style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--foreground)' }}>{user.fullName ?? user.name ?? user.email.split('@')[0]}</div>
+                            <div style={{ fontSize: '0.72rem', color: 'var(--muted-foreground)' }}>{user.email}</div>
+                          </div>
+                        </div>
+                        <Link to="/dashboard" onClick={() => setMobileOpen(false)}
+                          className="flex items-center gap-3 py-2.5 px-3 rounded-xl text-sm transition-all"
+                          style={{ color: 'var(--foreground)', fontFamily: 'var(--ace-font)' }}>
+                          <LayoutDashboard className="h-4 w-4 flex-shrink-0" style={{ color: 'var(--muted-foreground)' }} /> Dashboard
+                        </Link>
+                        {user.role === 'admin' && (
+                          <Link to="/admin" onClick={() => setMobileOpen(false)}
+                            className="flex items-center gap-3 py-2.5 px-3 rounded-xl text-sm transition-all"
+                            style={{ color: 'var(--ace-brand)', fontFamily: 'var(--ace-font)' }}>
+                            <Shield className="h-4 w-4 flex-shrink-0" /> Admin Portal
+                          </Link>
+                        )}
+                        <button
+                          onClick={() => { logout(); setMobileOpen(false); }}
+                          className="w-full flex items-center gap-3 py-2.5 px-3 rounded-xl text-sm mt-1"
+                          style={{ background: 'rgba(212,24,61,0.08)', color: 'var(--destructive)', fontFamily: 'var(--ace-font)', border: 'none', cursor: 'pointer', textAlign: 'left' }}>
+                          <LogOut className="h-4 w-4 flex-shrink-0" /> Sign Out
+                        </button>
+                      </div>
+                    ) : (
+                      <Link to="/login"
+                        className="block py-3 px-4 rounded-full text-sm font-bold text-white text-center active:scale-[0.97]"
+                        style={{ backgroundColor: '#00A2B6', fontFamily: 'var(--ace-font)' }}>
+                        Login
+                      </Link>
+                    )}
                   </motion.div>
                 </div>
               </motion.div>

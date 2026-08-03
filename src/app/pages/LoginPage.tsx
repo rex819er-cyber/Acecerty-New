@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Eye, EyeOff, ArrowRight, Shield, CheckCircle, AlertCircle, Wifi } from 'lucide-react';
-import { Link, useNavigate } from 'react-router';
+import { Link, useNavigate, useLocation } from 'react-router';
 import { AcecertyLogo } from '../components/AcecertyLogo';
 import { useAuth } from '../context/AuthContext';
 
@@ -16,6 +16,8 @@ const BENEFITS = [
 export default function LoginPage() {
   const { login, register } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const returnTo = (location.state as any)?.returnTo ?? '/dashboard';
 
   const [tab, setTab]               = useState<Tab>('signin');
   const [showPassword, setShowPw]   = useState(false);
@@ -39,7 +41,7 @@ export default function LoginPage() {
       }
       clearTimeout(slowTimer); setSlow(false);
       setSuccess(true);
-      setTimeout(() => navigate('/dashboard'), 1200);
+      setTimeout(() => navigate(returnTo, { replace: true }), 1200);
     } catch (err: any) {
       clearTimeout(slowTimer); setSlow(false);
       setError(err?.message ?? 'Something went wrong. Please try again.');
