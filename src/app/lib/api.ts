@@ -12,10 +12,14 @@ export const API_BASE = 'https://acecerty-backend.onrender.com/api';
 /* ── token management ──────────────────────────────────────────────────── */
 const STUDENT_KEY = 'student_access_token';
 const ADMIN_KEY   = 'admin_access_token';
+const REFRESH_KEY = 'student_refresh_token';
 
 export const getStudentToken  = (): string | null => { try { return localStorage.getItem(STUDENT_KEY); } catch { return null; } };
 export const storeStudentToken = (t: string) => { try { localStorage.setItem(STUDENT_KEY, t); } catch {} };
-export const clearStudentToken = () => { try { localStorage.removeItem(STUDENT_KEY); } catch {} };
+export const clearStudentToken = () => { try { localStorage.removeItem(STUDENT_KEY); localStorage.removeItem(REFRESH_KEY); } catch {} };
+
+export const getRefreshToken   = (): string | null => { try { return localStorage.getItem(REFRESH_KEY); } catch { return null; } };
+export const storeRefreshToken = (t: string) => { try { localStorage.setItem(REFRESH_KEY, t); } catch {} };
 
 export const getAdminToken  = (): string | null => { try { return localStorage.getItem(ADMIN_KEY); } catch { return null; } };
 export const storeAdminToken = (t: string) => { try { localStorage.setItem(ADMIN_KEY, t); } catch {} };
