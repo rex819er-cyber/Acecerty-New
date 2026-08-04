@@ -3,8 +3,14 @@ import { Link, useNavigate } from 'react-router';
 import { Shield, Lock, ChevronRight, CheckCircle2, AlertCircle, CreditCard, Smartphone, X, Wifi, ExternalLink } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useCart } from '../context/CartContext';
+import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
-import { apiCreateOrder, apiPayOrder, apiGetEntitlements } from '../lib/api';
+import { PageContainer, PageShell, CenteredCard } from '../components/layout/PageLayout';
+import {
+  NotAuthenticatedError, extractAuthorizationUrl, getActiveToken,
+  resolveGateway, startCheckout,
+} from '../lib/payments';
+import type { UiPayOption } from '../lib/payments';
 
 type PayMethod = 'card' | 'paystack' | 'flutterwave';
 
@@ -100,31 +106,74 @@ export default function CheckoutPage() {
     setErrors(e); return Object.keys(e).length === 0;
   }
 
-  async function handlePay() {
-    if (!isAuthenticated) {
-      navigate('/login', { state: { returnTo: '/checkout' } });
-      return;
-    }
-    if (!validateCard()) return;
+  /* Sends the visitor to sign in, remembering that they were mid-checkout. */
+  function requireSignIn() {
+    toast.error('Please sign in to complete enrolment');
+    navigate('/login', { state: { returnTo: '/checkout' } });
+  }
+
+  /**
+   * Runs the authorized checkout: token gate → POST /api/orders/checkout →
+   * redirect to the gateway's authorization URL.
+   */
+  async function runCheckout(option: UiPayOption) {
+    /* 1 — pre-checkout token check. No token means no network call at all. */
+    const token = getActiveToken();
+    if (!token) { requireSignIn(); return; }
+
+    const courseId = items[0]?.course.id;
+    if (!courseId) { setApiError('Your cart is empty.'); return; }
+
     setLoading(true); setApiError(''); setSlowConn(false);
     const slowTimer = setTimeout(() => setSlowConn(true), 2500);
+
     try {
-      const order  = await apiCreateOrder();
-      const result = await apiPayOrder(order.id, payMethod);
+      /* 2 — checkout execution */
+      const res = await startCheckout({
+        courseId,
+        ...resolveGateway(option),
+        /* Sent for multi-item carts; backends that only read `courseId` ignore it. */
+        courseIds: items.map(i => i.course.id),
+        email: form.email || undefined,
+        amount: total,
+      });
       clearTimeout(slowTimer); setSlowConn(false);
 
-      const redirectUrl = result.paymentUrl ?? result.authorizationUrl ?? (result as any).link;
-      if (redirectUrl) {
-        clearCart(); setPayUrl(redirectUrl); setStep('redirect');
-        setTimeout(() => { window.location.href = redirectUrl; }, 1500);
+      const authorizationUrl = extractAuthorizationUrl(res);
+      if (authorizationUrl) {
+        setPayUrl(authorizationUrl);
+        setStep('redirect');
+        /* The gateway returns the buyer to /checkout/callback?reference=… */
+        setTimeout(() => { window.location.href = authorizationUrl; }, 1200);
       } else {
-        clearCart(); setStep('success');
-        apiGetEntitlements().catch(() => {});
+        /* Gateway settled inline — nothing to redirect to. */
+        clearCart();
+        setStep('success');
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       clearTimeout(slowTimer); setSlowConn(false);
-      setApiError(err?.message ?? 'Payment initialisation failed. Please try again.');
+      if (err instanceof NotAuthenticatedError) { requireSignIn(); return; }
+      const e = err as { message?: string; status?: number };
+      if (e?.status === 401) { requireSignIn(); return; }
+      const msg = e?.message ?? 'Payment initialisation failed. Please try again.';
+      setApiError(msg);
+      toast.error(msg);
     } finally { setLoading(false); }
+  }
+
+  /* "Complete Enrolment" — validates the form, then hands off to the gateway. */
+  async function handlePay() {
+    if (!getActiveToken()) { requireSignIn(); return; }
+    if (!validateCard()) return;
+    await runCheckout(payMethod as UiPayOption);
+  }
+
+  /* Express wallets skip the card form but still require the terms checkbox
+     to be implied by the wallet's own confirmation sheet. */
+  async function handleExpressPay(option: 'apple_pay' | 'google_pay') {
+    if (!getActiveToken()) { requireSignIn(); return; }
+    setAgreed(true);
+    await runCheckout(option);
   }
 
   function formatCardNumber(v: string) { return v.replace(/\D/g,'').slice(0,16).replace(/(.{4})/g,'$1 ').trim(); }
@@ -132,14 +181,14 @@ export default function CheckoutPage() {
 
   if (step === 'redirect') {
     return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--background)', fontFamily: 'var(--ace-font)', padding: 24 }}>
-        <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 20, padding: 40, maxWidth: 420, width: '100%', textAlign: 'center' }}>
-          <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'rgba(0,162,182,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
+      <CenteredCard style={{ textAlign: 'center' }}>
+        <div>
+          <div style={{ width: 64, height: 64, borderRadius: 'var(--ace-radius-full)', background: 'var(--ace-brand-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
             <ExternalLink size={28} style={{ color: 'var(--ace-brand)' }} />
           </div>
           <h2 style={{ color: 'var(--foreground)', fontWeight: 800, marginBottom: 8, fontFamily: 'var(--ace-font)' }}>Redirecting to Payment Gateway</h2>
           <p style={{ color: 'var(--muted-foreground)', fontSize: '0.875rem', marginBottom: 24, lineHeight: 1.6, fontFamily: 'var(--ace-font)' }}>
-            You're being redirected to {payMethod === 'paystack' ? 'Paystack' : 'Flutterwave'} to complete your payment securely.
+            You're being redirected to our secure payment gateway. Your cart stays saved until the payment is confirmed.
           </p>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, color: 'var(--ace-brand)', fontSize: '0.82rem', fontFamily: 'var(--ace-font)' }}>
             <Wifi size={14} className="animate-pulse" /> Connecting to gateway…
@@ -150,44 +199,45 @@ export default function CheckoutPage() {
             </a>
           )}
         </div>
-      </div>
+      </CenteredCard>
     );
   }
 
   if (step === 'success') {
     return (
-      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--background)', fontFamily: 'var(--ace-font)', padding: 24 }}>
-        <motion.div initial={{ scale: 0.85, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ type: 'spring', stiffness: 300, damping: 24 }}
-          style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 24, padding: 40, maxWidth: 420, width: '100%', textAlign: 'center' }}>
-          <div style={{ width: 80, height: 80, borderRadius: '50%', background: 'rgba(0,162,182,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px' }}>
+      <CenteredCard style={{ textAlign: 'center' }}>
+        <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ type: 'spring', stiffness: 300, damping: 24 }}>
+          <div style={{ width: 80, height: 80, borderRadius: 'var(--ace-radius-full)', background: 'var(--ace-brand-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px' }}>
             <CheckCircle2 size={40} style={{ color: 'var(--ace-brand)' }} />
           </div>
-          <h1 style={{ color: 'var(--foreground)', fontWeight: 800, marginBottom: 8, fontFamily: 'var(--ace-font)' }}>Enrolment Confirmed!</h1>
-          <p style={{ color: 'var(--muted-foreground)', fontSize: '0.875rem', marginBottom: 6, fontFamily: 'var(--ace-font)' }}>Welcome, {form.firstName || 'Student'}!</p>
-          <p style={{ color: 'var(--muted-foreground)', fontSize: '0.8rem', marginBottom: 28, lineHeight: 1.6, fontFamily: 'var(--ace-font)' }}>
+          <h1 className="text-lg sm:text-xl" style={{ color: 'var(--foreground)', fontWeight: 800, marginBottom: 8, fontFamily: 'var(--ace-font)' }}>Enrolment Confirmed!</h1>
+          <p className="text-sm sm:text-base" style={{ color: 'var(--muted-foreground)', marginBottom: 6, fontFamily: 'var(--ace-font)' }}>Welcome, {form.firstName || 'Student'}!</p>
+          <p className="text-xs sm:text-sm" style={{ color: 'var(--muted-foreground)', marginBottom: 28, lineHeight: 1.6, fontFamily: 'var(--ace-font)' }}>
             A confirmation receipt has been sent to <strong style={{ color: 'var(--ace-brand)' }}>{form.email}</strong>. Course access will be activated within a few minutes.
           </p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <Link to="/courses" style={{ display: 'block', padding: '13px 0', borderRadius: 14, background: 'var(--ace-brand)', color: '#fff', fontWeight: 700, textAlign: 'center', textDecoration: 'none', fontFamily: 'var(--ace-font)' }}>Browse More Courses</Link>
-            <Link to="/"       style={{ display: 'block', padding: '11px 0', borderRadius: 14, background: 'var(--muted)', color: 'var(--foreground)', fontWeight: 600, textAlign: 'center', textDecoration: 'none', fontFamily: 'var(--ace-font)' }}>Back to Home</Link>
+            <Link to="/dashboard" className="text-sm sm:text-base" style={{ display: 'block', padding: '13px 0', borderRadius: 'var(--ace-radius-md)', background: 'var(--ace-brand)', color: 'var(--primary-foreground)', fontWeight: 700, textAlign: 'center', textDecoration: 'none', fontFamily: 'var(--ace-font)' }}>Go to My Dashboard</Link>
+            <Link to="/courses"   className="text-sm" style={{ display: 'block', padding: '11px 0', borderRadius: 'var(--ace-radius-md)', background: 'var(--muted)', color: 'var(--foreground)', fontWeight: 600, textAlign: 'center', textDecoration: 'none', fontFamily: 'var(--ace-font)' }}>Browse More Courses</Link>
           </div>
         </motion.div>
-      </div>
+      </CenteredCard>
     );
   }
 
   if (items.length === 0) {
     return (
-      <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16, background: 'var(--background)', fontFamily: 'var(--ace-font)' }}>
-        <p style={{ color: 'var(--foreground)', fontSize: '1.1rem', fontWeight: 700 }}>Your cart is empty</p>
-        <Link to="/courses" style={{ padding: '11px 28px', borderRadius: 999, background: 'var(--ace-brand)', color: '#fff', fontWeight: 700, textDecoration: 'none', fontFamily: 'var(--ace-font)' }}>Browse Courses</Link>
-      </div>
+      <CenteredCard style={{ textAlign: 'center' }}>
+        <div>
+          <p className="text-base sm:text-lg" style={{ color: 'var(--foreground)', fontWeight: 700, marginBottom: 16, fontFamily: 'var(--ace-font)' }}>Your cart is empty</p>
+          <Link to="/courses" className="text-sm sm:text-base" style={{ display: 'inline-block', padding: '12px 28px', borderRadius: 'var(--ace-radius-full)', background: 'var(--ace-brand)', color: 'var(--primary-foreground)', fontWeight: 700, textDecoration: 'none', fontFamily: 'var(--ace-font)' }}>Browse Courses</Link>
+        </div>
+      </CenteredCard>
     );
   }
 
   return (
-    <div style={{ minHeight: '100vh', paddingTop: 80, paddingBottom: 80, paddingLeft: 16, paddingRight: 16, background: 'var(--background)', fontFamily: 'var(--ace-font)' }}>
-      <div style={{ maxWidth: 900, margin: '0 auto' }}>
+    <PageShell>
+      <PageContainer width="md">
         {/* Breadcrumb */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 32, fontSize: '0.85rem', color: 'var(--muted-foreground)' }}>
           <Link to="/courses" style={{ color: 'var(--muted-foreground)', textDecoration: 'none', fontFamily: 'var(--ace-font)' }}>← Back to courses</Link>
@@ -216,11 +266,11 @@ export default function CheckoutPage() {
 
         <div className="grid lg:grid-cols-[1fr_340px] gap-6 items-start">
           {/* Form card */}
-          <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 24, overflow: 'hidden' }}>
+          <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 'var(--ace-radius-xl)', overflow: 'hidden' }}>
             <AnimatePresence mode="wait">
               {step === 'details' ? (
                 <motion.div key="details" initial={{ opacity: 0, x: -16 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 16 }} transition={{ duration: 0.2 }}>
-                  <div style={{ padding: '32px 28px' }}>
+                  <div className="p-5 sm:p-7">
                     <h2 style={{ color: 'var(--foreground)', fontWeight: 800, marginBottom: 4, fontFamily: 'var(--ace-font)' }}>Your Details</h2>
                     <p style={{ color: 'var(--muted-foreground)', fontSize: '0.875rem', marginBottom: 24, fontFamily: 'var(--ace-font)' }}>We'll send your access details and receipt here.</p>
                     <div style={{ display: 'flex', gap: 16, marginBottom: 16 }}>
@@ -241,7 +291,7 @@ export default function CheckoutPage() {
                 </motion.div>
               ) : (
                 <motion.div key="payment" initial={{ opacity: 0, x: 16 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -16 }} transition={{ duration: 0.2 }}>
-                  <div style={{ padding: '32px 28px' }}>
+                  <div className="p-5 sm:p-7">
                     <button onClick={() => setStep('details')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted-foreground)', fontSize: '0.85rem', fontFamily: 'var(--ace-font)', marginBottom: 20 }}>← Back</button>
                     <h2 style={{ color: 'var(--foreground)', fontWeight: 800, marginBottom: 4, fontFamily: 'var(--ace-font)' }}>Payment</h2>
                     <p style={{ color: 'var(--muted-foreground)', fontSize: '0.875rem', marginBottom: 24, fontFamily: 'var(--ace-font)' }}>Choose your preferred payment method.</p>
@@ -257,6 +307,14 @@ export default function CheckoutPage() {
                       </div>
                     )}
 
+                    {!isAuthenticated && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'color-mix(in srgb, var(--destructive) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--destructive) 30%, transparent)', borderRadius: 'var(--ace-radius-sm)', padding: '10px 14px', marginBottom: 16, color: 'var(--destructive)', fontSize: '0.82rem', fontFamily: 'var(--ace-font)' }}>
+                        <AlertCircle size={13} style={{ flexShrink: 0 }} />
+                        <span>You need to be signed in to enrol.</span>
+                        <button onClick={requireSignIn} style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--destructive)', fontWeight: 700, fontFamily: 'var(--ace-font)', fontSize: '0.82rem' }}>Sign in</button>
+                      </div>
+                    )}
+
                     {/* Express */}
                     <div style={{ marginBottom: 20 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
@@ -265,8 +323,8 @@ export default function CheckoutPage() {
                         <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
                       </div>
                       <div style={{ display: 'flex', gap: 10 }}>
-                        <ApplePayButton onClick={() => { setAgreed(true); clearCart(); setStep('success'); }} />
-                        <GooglePayButton onClick={() => { setAgreed(true); clearCart(); setStep('success'); }} />
+                        <ApplePayButton onClick={() => handleExpressPay('apple_pay')} />
+                        <GooglePayButton onClick={() => handleExpressPay('google_pay')} />
                       </div>
                     </div>
 
@@ -339,7 +397,7 @@ export default function CheckoutPage() {
           </div>
 
           {/* Order summary */}
-          <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 24, padding: 24, position: 'sticky', top: 90 }}>
+          <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 'var(--ace-radius-xl)', padding: 20, position: 'sticky', top: 90 }}>
             <h3 style={{ color: 'var(--foreground)', fontWeight: 800, marginBottom: 16, fontFamily: 'var(--ace-font)' }}>Order Summary</h3>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 20 }}>
               {items.map(({ course }) => (
@@ -369,7 +427,7 @@ export default function CheckoutPage() {
             </div>
           </div>
         </div>
-      </div>
-    </div>
+      </PageContainer>
+    </PageShell>
   );
 }

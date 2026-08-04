@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { apiLogin, apiRegister, apiGetMe, storeStudentToken, clearStudentToken, getStudentToken } from '../lib/api';
-import type { ApiUser } from '../lib/api';
+import { apiLogin, apiRegister, apiGetMe, storeStudentToken, clearStudentToken, getStudentToken, persistSession } from '../lib/api';
+import type { ApiUser, AuthSession } from '../lib/api';
 
 interface AuthState {
   user: ApiUser | null;
@@ -11,6 +11,8 @@ interface AuthState {
 interface AuthContextValue extends AuthState {
   login: (email: string, password: string) => Promise<ApiUser>;
   register: (fullName: string, email: string, password: string) => Promise<ApiUser>;
+  /** Adopts a session obtained outside the form flow (Google / LinkedIn). */
+  applySession: (session: AuthSession) => ApiUser;
   logout: () => void;
 }
 
@@ -44,12 +46,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return user;
   }, []);
 
+  const applySession = useCallback((session: AuthSession): ApiUser => {
+    persistSession(session);
+    setState({ user: session.user, token: session.token, loading: false, isAuthenticated: true });
+    return session.user;
+  }, []);
+
   const logout = useCallback(() => {
     clearStudentToken();
     setState({ user: null, token: null, loading: false, isAuthenticated: false });
   }, []);
 
-  return <AuthContext.Provider value={{ ...state, login, register, logout }}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={{ ...state, login, register, applySession, logout }}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {

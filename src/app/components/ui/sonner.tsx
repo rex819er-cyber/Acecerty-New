@@ -1,10 +1,12 @@
 "use client";
 
-import { useTheme } from "next-themes";
+/* Reads the app's own ThemeContext rather than next-themes, which has no
+   provider mounted in this project. */
+import { useTheme } from "../../context/ThemeContext";
 import { Toaster as Sonner, ToasterProps } from "sonner";
 
 const Toaster = ({ ...props }: ToasterProps) => {
-  const { theme = "system" } = useTheme();
+  const { theme } = useTheme();
 
   return (
     <Sonner

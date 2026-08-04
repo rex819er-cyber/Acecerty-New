@@ -22,8 +22,8 @@
 
   /* Text – light mode */
   --ace-text:         #111111;
-  --ace-text-muted:   #6b7280;
-  --ace-text-subtle:  #9ca3af;
+  --ace-text-muted:   #5b6472;   /* ≥4.5:1 on --ace-bg (WCAG AA body text) */
+  --ace-text-subtle:  #767f8c;   /* ≥3:1 — large text, icons, meta only */
 
   /* Border – light mode */
   --ace-border:       #e5e7eb;
@@ -97,8 +97,8 @@
   --ace-surface-alt:  #141414;
 
   --ace-text:         #ffffff;
-  --ace-text-muted:   rgba(255, 255, 255, 0.45);
-  --ace-text-subtle:  rgba(255, 255, 255, 0.25);
+  --ace-text-muted:   rgba(255, 255, 255, 0.66);   /* ≥4.5:1 on --ace-bg */
+  --ace-text-subtle:  rgba(255, 255, 255, 0.48);   /* ≥3:1 — meta text only */
 
   --ace-border:       rgba(255, 255, 255, 0.08);
 

@@ -38,7 +38,7 @@ export function VideoModal({ open, onClose }: VideoModalProps) {
             exit={{ clipPath: 'inset(43.5% 43.5% 33.5% 43.5%)', opacity: 0 }}
             transition={{ type: 'spring', stiffness: 100, damping: 20 }}
             onClick={(e) => e.stopPropagation()}
-            className="relative w-full max-w-4xl mx-8 flex items-center justify-center"
+            className="relative w-full max-w-4xl mx-4 sm:mx-8 flex items-center justify-center"
             style={{ borderRadius: 16, overflow: 'hidden', position: 'relative', aspectRatio: '16/9', backgroundColor: '#0a0f1a' }}
           >
             {/* Placeholder — video content removed */}

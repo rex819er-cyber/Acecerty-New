@@ -1,30 +1,25 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate, useLocation } from 'react-router';
+import { useNavigate } from 'react-router';
 import {
   LayoutDashboard, BookOpen, DollarSign, Layers, ClipboardList,
-  ShoppingCart, CreditCard, Users, FileText, LogOut, Menu, X,
+  ShoppingCart, CreditCard, Users, UserCog, FileText, LogOut, Menu, X,
   Plus, Edit2, Trash2, Upload, Eye, EyeOff, ChevronDown, ChevronUp,
-  Wifi, AlertCircle, CheckCircle2, Save, ShieldAlert, RefreshCw,
+  Wifi, AlertCircle, CheckCircle2, Save, RefreshCw,
 } from 'lucide-react';
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import {
-  adminGetStats, adminGetCourses, adminCreateCourse, adminUpdateCourse, adminPublishCourse,
-  adminUploadImage, adminGetPrices, adminUpdatePrice, adminAddPrice, adminDeletePrice,
+  adminGetStats, adminGetCourses, adminCreateCourse, adminUpdateCourse, adminDeleteCourse,
+  adminPublishCourse, adminUploadImage, adminGetPrices, adminUpdatePrice, adminAddPrice, adminDeletePrice,
   adminGetExams, adminCreateExam, adminPublishExam, adminGetQuestions, adminCreateQuestion,
-  adminImportQuestions, adminGetOrders, adminGetPayments, adminGetLeads, adminGetAuditLogs,
-  adminAddModule, adminAddLesson,
-  getAdminToken, storeAdminToken, clearAdminToken, apiLogin,
+  adminImportQuestions, adminGetOrdersList, adminGetUsers, adminGetPayments, adminGetLeads, adminGetAuditLogs,
+  adminAddModule, adminAddLesson, clearAdminToken,
 } from '../lib/api';
 import type {
   AdminStats, AdminCourse, ProductPrice, AdminExamProduct, AdminQuestion,
-  AdminOrder, AdminPayment, AdminLead, AdminAuditLog, AdminModule,
+  AdminOrder, AdminPayment, AdminLead, AdminAuditLog, AdminModule, AdminUser,
 } from '../lib/api';
 
-/* ── Authorised admin credentials (front-end gate) ────────────────────── */
-const ADMIN_EMAIL    = 'admin@acecerty.com';
-const ADMIN_PASSWORD = 'Acecerty.admin.access';
-
-type Section = 'overview'|'courses'|'prices'|'modules'|'exams'|'orders'|'payments'|'leads'|'audit';
+type Section = 'overview'|'courses'|'prices'|'modules'|'exams'|'orders'|'users'|'payments'|'leads'|'audit';
 
 /* ── shared styles & UI primitives ────────────────────────────────────── */
 const inp: React.CSSProperties = {
@@ -35,7 +30,7 @@ const inp: React.CSSProperties = {
 
 function ColdBanner({ msg }: { msg: string }) {
   return (
-    <div style={{ background: 'rgba(0,162,182,0.1)', border: '1px solid var(--ace-brand)', borderRadius: 8, color: 'var(--ace-brand)', padding: '10px 14px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8, fontFamily: 'var(--ace-font)', fontSize: '0.82rem' }}>
+    <div style={{ background: 'var(--ace-brand-light)', border: '1px solid var(--ace-brand)', borderRadius: 'var(--ace-radius-sm)', color: 'var(--ace-brand)', padding: '10px 14px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8, fontFamily: 'var(--ace-font)', fontSize: '0.82rem' }}>
       <Wifi size={14} className="animate-pulse shrink-0" /> {msg}
     </div>
   );
@@ -43,9 +38,9 @@ function ColdBanner({ msg }: { msg: string }) {
 
 function ErrBanner({ msg, onRetry }: { msg: string; onRetry?: () => void }) {
   return (
-    <div style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: 8, color: '#ef4444', padding: '10px 14px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8, fontFamily: 'var(--ace-font)', fontSize: '0.82rem' }}>
+    <div style={{ background: 'color-mix(in srgb, var(--destructive) 8%, transparent)', border: '1px solid color-mix(in srgb, var(--destructive) 30%, transparent)', borderRadius: 'var(--ace-radius-sm)', color: 'var(--destructive)', padding: '10px 14px', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8, fontFamily: 'var(--ace-font)', fontSize: '0.82rem' }}>
       <AlertCircle size={14} className="shrink-0" /> {msg}
-      {onRetry && <button onClick={onRetry} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontFamily: 'var(--ace-font)', fontSize: '0.78rem' }}><RefreshCw size={12} /> Retry</button>}
+      {onRetry && <button onClick={onRetry} style={{ marginLeft: 'auto', background: 'none', border: 'none', color: 'var(--destructive)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, fontFamily: 'var(--ace-font)', fontSize: '0.78rem' }}><RefreshCw size={12} /> Retry</button>}
     </div>
   );
 }
@@ -100,9 +95,9 @@ function Btn({ children, onClick, variant = 'primary', size = 'md', disabled }: 
   children: React.ReactNode; onClick?: () => void; variant?: 'primary'|'ghost'|'danger'|'outline'; size?: 'sm'|'md'; disabled?: boolean;
 }) {
   const styles: Record<string, React.CSSProperties> = {
-    primary: { background: 'var(--ace-brand)', color: '#fff' },
+    primary: { background: 'var(--ace-brand)', color: 'var(--primary-foreground)' },
     ghost:   { background: 'var(--muted)', color: 'var(--muted-foreground)' },
-    danger:  { background: 'rgba(239,68,68,0.15)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.3)' },
+    danger:  { background: 'color-mix(in srgb, var(--destructive) 15%, transparent)', color: 'var(--destructive)', border: '1px solid color-mix(in srgb, var(--destructive) 30%, transparent)' },
     outline: { background: 'transparent', color: 'var(--ace-brand)', border: '1px solid var(--ace-brand)' },
   };
   return (
@@ -118,7 +113,7 @@ function Btn({ children, onClick, variant = 'primary', size = 'md', disabled }: 
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onClick={onClose}>
-      <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 16, padding: 28, width: '100%', maxWidth: 540, maxHeight: '85vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+      <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 'var(--ace-radius-lg)', width: '100%', maxWidth: 540, maxHeight: '85vh', overflowY: 'auto' }} className="p-5 sm:p-7" onClick={e => e.stopPropagation()}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
           <h3 style={{ color: 'var(--foreground)', fontFamily: 'var(--ace-font)', fontWeight: 700 }}>{title}</h3>
           <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted-foreground)' }}><X size={18} /></button>
@@ -226,6 +221,7 @@ function CoursesSection() {
   const [form, setForm]           = useState({ title: '', description: '', category: '', level: 'Intermediate', format: 'online', price: '' });
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [saving, setSaving]       = useState(false);
+  const [deleting, setDeleting]   = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   function openCreate() { setEditing(null); setForm({ title: '', description: '', category: '', level: 'Intermediate', format: 'online', price: '' }); setShowModal(true); }
@@ -254,6 +250,20 @@ function CoursesSection() {
     setCourses(cs => cs.map(x => x.id === c.id ? updated : x));
   }
 
+  /* DELETE /api/admin/courses/{id} — removes it from the public catalog too */
+  async function remove(c: AdminCourse) {
+    if (!window.confirm(`Delete "${c.title}"? This removes it from the public catalog immediately.`)) return;
+    setDeleting(c.id);
+    try {
+      await adminDeleteCourse(c.id);
+      setCourses(cs => cs.filter(x => x.id !== c.id));
+    } catch (e: any) {
+      alert(e?.message ?? 'Delete failed');
+    } finally {
+      setDeleting(null);
+    }
+  }
+
   return (
     <div>
       {slow && <ColdBanner msg="Loading courses from backend…" />}
@@ -274,8 +284,11 @@ function CoursesSection() {
               <Td>
                 <div style={{ display: 'flex', gap: 6 }}>
                   <Btn size="sm" variant="ghost" onClick={() => openEdit(c)}><Edit2 size={12} /></Btn>
-                  <Btn size="sm" variant={c.published ? 'danger' : 'outline'} onClick={() => togglePublish(c)}>
+                  <Btn size="sm" variant={c.published ? 'ghost' : 'outline'} onClick={() => togglePublish(c)}>
                     {c.published ? <EyeOff size={12} /> : <Eye size={12} />}
+                  </Btn>
+                  <Btn size="sm" variant="danger" disabled={deleting === c.id} onClick={() => remove(c)}>
+                    <Trash2 size={12} />
                   </Btn>
                 </div>
               </Td>
@@ -545,7 +558,7 @@ function ExamsSection() {
       {showCreate && (
         <Modal title="New Exam" onClose={() => setShowCreate(false)}>
           <Field label="Title"><input style={inp} value={newExam.title} onChange={e => setNewExam(f => ({ ...f, title: e.target.value }))} /></Field>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <Field label="Questions"><input style={inp} type="number" value={newExam.questions} onChange={e => setNewExam(f => ({ ...f, questions: e.target.value }))} /></Field>
             <Field label="Duration (min)"><input style={inp} type="number" value={newExam.duration} onChange={e => setNewExam(f => ({ ...f, duration: e.target.value }))} /></Field>
             <Field label="Price (₦)"><input style={inp} type="number" value={newExam.price} onChange={e => setNewExam(f => ({ ...f, price: e.target.value }))} /></Field>
@@ -572,13 +585,63 @@ function ExamsSection() {
   );
 }
 
+/* GET /api/admin/users — platform analytics: accounts, roles, growth */
+function UsersSection() {
+  const { data: users, slow, err, reload } = useLive(() => adminGetUsers(), [] as AdminUser[]);
+
+  const admins   = users.filter(u => u.role === 'admin').length;
+  const students = users.length - admins;
+
+  return (
+    <div>
+      {slow && <ColdBanner msg="Loading users from backend…" />}
+      {err  && <ErrBanner msg={err} onRetry={reload} />}
+
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+        <StatCard icon={<Users size={22} />}   label="Total Accounts" value={users.length.toLocaleString()} color="var(--ace-brand)" />
+        <StatCard icon={<BookOpen size={22} />} label="Students"      value={students.toLocaleString()}     color="#a78bfa" />
+        <StatCard icon={<UserCog size={22} />}  label="Admins"        value={admins.toLocaleString()}       color="#fb923c" />
+      </div>
+
+      <SectionHeader title={`Users (${users.length})`} action={<Btn variant="ghost" size="sm" onClick={reload}><RefreshCw size={12} /> Refresh</Btn>} />
+      <TblWrap>
+        <thead><tr><Th>Name</Th><Th>Email</Th><Th>Role</Th><Th>Joined</Th></tr></thead>
+        <tbody>
+          {users.length === 0 && !slow && (
+            <tr><td colSpan={4} style={{ textAlign: 'center', padding: '32px 0', color: 'var(--muted-foreground)', fontFamily: 'var(--ace-font)', fontSize: '0.85rem' }}>No users yet.</td></tr>
+          )}
+          {users.map(u => (
+            <tr key={u.id}>
+              <Td><span style={{ color: 'var(--foreground)', fontWeight: 600 }}>{u.fullName ?? u.name ?? '—'}</span></Td>
+              <Td>{u.email}</Td>
+              <Td><Badge status={u.role === 'admin' ? 'published' : 'pending'} /></Td>
+              <Td>{u.createdAt ? new Date(u.createdAt).toLocaleDateString() : '—'}</Td>
+            </tr>
+          ))}
+        </tbody>
+      </TblWrap>
+    </div>
+  );
+}
+
 function OrdersSection() {
-  const { data, slow, err, reload } = useLive(() => adminGetOrders().then(r => r.orders), [] as AdminOrder[]);
+  const { data, slow, err, reload } = useLive(() => adminGetOrdersList(), [] as AdminOrder[]);
+
+  const revenue = data.reduce((sum, o) => sum + (o.total ?? 0), 0);
+  const paid    = data.filter(o => ['completed', 'success', 'paid'].includes((o.status ?? '').toLowerCase())).length;
+
   return (
     <div>
       {slow && <ColdBanner msg="Loading orders from backend…" />}
       {err  && <ErrBanner msg={err} onRetry={reload} />}
-      <SectionHeader title={`Orders (${data.length})`} />
+
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+        <StatCard icon={<ShoppingCart size={22} />} label="Total Orders" value={data.length.toLocaleString()}     color="var(--ace-brand)" />
+        <StatCard icon={<CheckCircle2 size={22} />} label="Paid Orders"  value={paid.toLocaleString()}            color="#22c55e" />
+        <StatCard icon={<DollarSign size={22} />}   label="Gross Value"  value={`₦${revenue.toLocaleString()}`}   color="#fb923c" />
+      </div>
+
+      <SectionHeader title={`Orders (${data.length})`} action={<Btn variant="ghost" size="sm" onClick={reload}><RefreshCw size={12} /> Refresh</Btn>} />
       <TblWrap>
         <thead><tr><Th>Order ID</Th><Th>User</Th><Th>Total</Th><Th>Status</Th><Th>Date</Th></tr></thead>
         <tbody>
@@ -670,127 +733,6 @@ function AuditSection() {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
-   ADMIN GATEWAY — strict credential check then API auth
-═══════════════════════════════════════════════════════════════════════ */
-function AdminGateway({ onSuccess }: { onSuccess: () => void }) {
-  const [email, setEmail]       = useState('');
-  const [password, setPassword] = useState('');
-  const [showPw, setShowPw]     = useState(false);
-  const [loading, setLoading]   = useState(false);
-  const [error, setError]       = useState('');
-  const [slow, setSlow]         = useState(false);
-
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    setError('');
-
-    /* ── Step 1: front-end credential gate ─────────────────── */
-    if (email.trim().toLowerCase() !== ADMIN_EMAIL || password !== ADMIN_PASSWORD) {
-      setError('Unauthorized access: Invalid admin email or password.');
-      return;
-    }
-
-    /* ── Step 2: fire live API auth ─────────────────────────── */
-    setLoading(true); setSlow(false);
-    const t = setTimeout(() => setSlow(true), 2500);
-    try {
-      const r = await apiLogin(email.trim(), password);
-      clearTimeout(t); setSlow(false);
-      if (r.user.role !== 'admin') {
-        throw new Error('Access denied — this account does not have admin privileges.');
-      }
-      storeAdminToken(r.token);
-      onSuccess();
-    } catch (err: any) {
-      clearTimeout(t); setSlow(false);
-      setError(err?.message ?? 'Login failed. Please try again.');
-    } finally { setLoading(false); }
-  }
-
-  return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--background)', fontFamily: 'var(--ace-font)', padding: 16 }}>
-      <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 20, padding: '40px 36px', width: '100%', maxWidth: 420 }}>
-
-        {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 28 }}>
-          <div style={{ width: 44, height: 44, borderRadius: 12, background: 'var(--ace-brand)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-            <LayoutDashboard size={20} color="#fff" />
-          </div>
-          <div>
-            <div style={{ color: 'var(--foreground)', fontWeight: 800, fontSize: '1.1rem', fontFamily: 'var(--ace-font)' }}>Acecerty Admin</div>
-            <div style={{ color: 'var(--muted-foreground)', fontSize: '0.75rem', fontFamily: 'var(--ace-font)' }}>Restricted — authorised personnel only</div>
-          </div>
-        </div>
-
-        {slow && <ColdBanner msg="Connecting to live backend — server may be waking up…" />}
-
-        <form onSubmit={submit}>
-          <Field label="Admin Email">
-            <input
-              style={inp}
-              type="email"
-              value={email}
-              onChange={e => { setEmail(e.target.value); setError(''); }}
-              required
-              autoFocus
-              autoComplete="username"
-              placeholder="admin@acecerty.com"
-            />
-          </Field>
-
-          <Field label="Password">
-            <div style={{ position: 'relative' }}>
-              <input
-                style={{ ...inp, paddingRight: 40 }}
-                type={showPw ? 'text' : 'password'}
-                value={password}
-                onChange={e => { setPassword(e.target.value); setError(''); }}
-                required
-                autoComplete="current-password"
-                placeholder="••••••••"
-              />
-              <button
-                type="button"
-                onClick={() => setShowPw(v => !v)}
-                style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted-foreground)' }}
-                aria-label={showPw ? 'Hide password' : 'Show password'}
-              >
-                {showPw ? <EyeOff size={15} /> : <Eye size={15} />}
-              </button>
-            </div>
-          </Field>
-
-          {error && (
-            <div style={{ color: 'var(--destructive)', fontSize: '0.82rem', marginBottom: 14, display: 'flex', alignItems: 'flex-start', gap: 7, background: 'rgba(212,24,61,0.08)', border: '1px solid rgba(212,24,61,0.25)', borderRadius: 8, padding: '10px 12px' }}>
-              <ShieldAlert size={14} style={{ flexShrink: 0, marginTop: 1 }} />
-              <span style={{ fontFamily: 'var(--ace-font)', lineHeight: 1.5 }}>{error}</span>
-            </div>
-          )}
-
-          <button
-            type="submit"
-            disabled={loading}
-            style={{ width: '100%', padding: '12px 0', borderRadius: 10, border: 'none', background: 'var(--ace-brand)', color: '#fff', fontFamily: 'var(--ace-font)', fontWeight: 700, fontSize: '0.95rem', cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.7 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 4 }}
-          >
-            {loading
-              ? <><span style={{ width: 16, height: 16, border: '2px solid #fff', borderTopColor: 'transparent', borderRadius: '50%', display: 'inline-block', animation: 'spin 0.7s linear infinite' }} /> Signing in…</>
-              : 'Access Dashboard'}
-          </button>
-        </form>
-
-        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-
-        <div style={{ marginTop: 20, padding: '12px 14px', background: 'rgba(0,162,182,0.06)', border: '1px solid var(--border)', borderRadius: 10 }}>
-          <div style={{ color: 'var(--muted-foreground)', fontSize: '0.74rem', fontFamily: 'var(--ace-font)', lineHeight: 1.6 }}>
-            This portal is restricted to authorised Acecerty administrators. Unauthorised access attempts are logged.
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ═══════════════════════════════════════════════════════════════════════
    MAIN DASHBOARD SHELL
 ═══════════════════════════════════════════════════════════════════════ */
 const NAV_ITEMS: { key: Section; label: string; icon: React.ReactNode }[] = [
@@ -800,17 +742,15 @@ const NAV_ITEMS: { key: Section; label: string; icon: React.ReactNode }[] = [
   { key: 'modules',   label: 'Modules',     icon: <Layers size={17} />          },
   { key: 'exams',     label: 'Exams',       icon: <ClipboardList size={17} />   },
   { key: 'orders',    label: 'Orders',      icon: <ShoppingCart size={17} />    },
+  { key: 'users',     label: 'Users',       icon: <UserCog size={17} />         },
   { key: 'payments',  label: 'Payments',    icon: <CreditCard size={17} />      },
   { key: 'leads',     label: 'Leads',       icon: <Users size={17} />           },
   { key: 'audit',     label: 'Audit Logs',  icon: <FileText size={17} />        },
 ];
 
 export default function AdminDashboard() {
-  const navigate  = useNavigate();
-  const location  = useLocation();
-  const isLoginRoute = location.pathname === '/admin/login';
+  const navigate = useNavigate();
 
-  const [authed, setAuthed]     = useState(() => !!getAdminToken());
   const [section, setSection]   = useState<Section>('overview');
   const [sideOpen, setSideOpen] = useState(false);
 
@@ -819,30 +759,12 @@ export default function AdminDashboard() {
     return () => document.documentElement.classList.remove('dark');
   }, []);
 
-  /* ── Route guard ────────────────────────────────────────────────────── */
-  useEffect(() => {
-    if (!authed && !isLoginRoute) {
-      /* Unauthenticated visit to /admin → send to login */
-      navigate('/admin/login', { replace: true });
-    }
-    if (authed && isLoginRoute) {
-      /* Already authed but on login page → send to dashboard */
-      navigate('/admin', { replace: true });
-    }
-  }, [authed, isLoginRoute, navigate]);
-
-  function handleLoginSuccess() {
-    setAuthed(true);
-    navigate('/admin', { replace: true });
-  }
-
+  /* Access control lives in <AdminRoute>, so by the time this renders we
+     already hold a valid admin_access_token. */
   function logout() {
     clearAdminToken();
-    setAuthed(false);
     navigate('/admin/login', { replace: true });
   }
-
-  if (!authed) return <AdminGateway onSuccess={handleLoginSuccess} />;
 
   const SECTION_MAP: Record<Section, React.ReactNode> = {
     overview:  <OverviewSection />,
@@ -851,6 +773,7 @@ export default function AdminDashboard() {
     modules:   <ModulesSection />,
     exams:     <ExamsSection />,
     orders:    <OrdersSection />,
+    users:     <UsersSection />,
     payments:  <PaymentsSection />,
     leads:     <LeadsSection />,
     audit:     <AuditSection />,
@@ -869,7 +792,7 @@ export default function AdminDashboard() {
       }} className="lg:!translate-x-0">
         <div style={{ padding: '20px 18px 14px', display: 'flex', alignItems: 'center', gap: 10, borderBottom: '1px solid var(--border)' }}>
           <div style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--ace-brand)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <LayoutDashboard size={15} color="#fff" />
+            <LayoutDashboard size={15} color="var(--primary-foreground)" />
           </div>
           <span style={{ color: 'var(--foreground)', fontWeight: 800, fontSize: '0.95rem' }}>Acecerty Admin</span>
           <button onClick={() => setSideOpen(false)} className="lg:hidden ml-auto" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted-foreground)' }}><X size={16} /></button>
@@ -878,7 +801,7 @@ export default function AdminDashboard() {
           {NAV_ITEMS.map(({ key, label, icon }) => (
             <button key={key} onClick={() => { setSection(key); setSideOpen(false); }} style={{
               width: '100%', padding: '9px 12px', borderRadius: 8, border: 'none', cursor: 'pointer', marginBottom: 2,
-              background: section === key ? 'rgba(0,162,182,0.15)' : 'transparent',
+              background: section === key ? 'var(--ace-brand-light)' : 'transparent',
               color: section === key ? 'var(--ace-brand)' : 'var(--muted-foreground)',
               display: 'flex', alignItems: 'center', gap: 10, textAlign: 'left',
               fontFamily: 'var(--ace-font)', fontSize: '0.875rem', fontWeight: section === key ? 600 : 400,
@@ -900,7 +823,7 @@ export default function AdminDashboard() {
             {NAV_ITEMS.find(n => n.key === section)?.label}
           </span>
         </div>
-        <div style={{ padding: '28px 24px', maxWidth: 1200, margin: '0 auto' }}>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-7">
           {SECTION_MAP[section]}
         </div>
       </div>

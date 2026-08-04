@@ -59,7 +59,7 @@ export function AccordionCarousel() {
   const [active, setActive] = useState(0);
 
   return (
-    <section className="py-20 px-4 bg-background" style={{ fontFamily: 'var(--ace-font)' }}>
+    <section className="py-16 sm:py-20 px-4 sm:px-6 lg:px-8 bg-background" style={{ fontFamily: 'var(--ace-font)' }}>
       <div className="max-w-7xl mx-auto">
         {/* Header */}
         <div className="mb-12 flex flex-col sm:flex-row sm:items-end gap-4 justify-between">

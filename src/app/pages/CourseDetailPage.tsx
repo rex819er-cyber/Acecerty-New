@@ -335,7 +335,7 @@ function PageSkeleton() {
   return (
     <div style={{ fontFamily: 'var(--ace-font)' }} className="min-h-screen">
       <div style={{ background: 'var(--surface)', borderBottom: '1px solid var(--border)' }} className="py-10 px-4">
-        <div className="max-w-6xl mx-auto flex gap-8">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 flex gap-8">
           <div className="flex-1">
             <div style={{ background: 'var(--muted)', borderRadius: 8 }} className="h-8 w-3/4 mb-4 animate-pulse" />
             <div style={{ background: 'var(--muted)', borderRadius: 8 }} className="h-4 w-full mb-2 animate-pulse" />
@@ -344,7 +344,7 @@ function PageSkeleton() {
           <div style={{ background: 'var(--muted)', borderRadius: 12 }} className="w-80 h-64 animate-pulse shrink-0" />
         </div>
       </div>
-      <div className="max-w-6xl mx-auto px-4 py-8">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div style={{ background: 'var(--muted)', borderRadius: 8 }} className="h-64 animate-pulse" />
       </div>
     </div>
@@ -615,7 +615,7 @@ export default function CourseDetailPage() {
     <div style={{ fontFamily: 'var(--ace-font)', background: 'var(--bg)', minHeight: '100vh' }}>
       {/* Hero header */}
       <div style={{ background: 'var(--surface)', borderBottom: '1px solid var(--border)', paddingTop: 32, paddingBottom: 32 }}>
-        <div className="max-w-6xl mx-auto px-4">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
           <Link to="/courses" style={{ color: 'var(--ace-brand)', textDecoration: 'none', fontSize: '0.85rem', display: 'inline-flex', alignItems: 'center', gap: 4, marginBottom: 16 }}>
             <ArrowLeft size={14} /> All courses
           </Link>
@@ -684,7 +684,7 @@ export default function CourseDetailPage() {
       </div>
 
       {/* Main body */}
-      <div className="max-w-6xl mx-auto px-4 py-8">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="flex flex-col lg:flex-row gap-8">
           {/* Left column */}
           <div className="flex-1 min-w-0">

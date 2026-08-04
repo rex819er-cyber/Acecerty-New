@@ -14,9 +14,15 @@ const STUDENT_KEY = 'student_access_token';
 const ADMIN_KEY   = 'admin_access_token';
 const REFRESH_KEY = 'student_refresh_token';
 
-export const getStudentToken  = (): string | null => { try { return localStorage.getItem(STUDENT_KEY); } catch { return null; } };
+/* Reads student_access_token, falling back to the plain `accessToken` key that
+   older sessions (and the OAuth callbacks) may have written. */
+export const getStudentToken  = (): string | null => {
+  try { return localStorage.getItem(STUDENT_KEY) ?? localStorage.getItem('accessToken'); } catch { return null; }
+};
 export const storeStudentToken = (t: string) => { try { localStorage.setItem(STUDENT_KEY, t); } catch {} };
-export const clearStudentToken = () => { try { localStorage.removeItem(STUDENT_KEY); localStorage.removeItem(REFRESH_KEY); } catch {} };
+export const clearStudentToken = () => {
+  try { [STUDENT_KEY, REFRESH_KEY, 'accessToken'].forEach(k => localStorage.removeItem(k)); } catch {}
+};
 
 export const getRefreshToken   = (): string | null => { try { return localStorage.getItem(REFRESH_KEY); } catch { return null; } };
 export const storeRefreshToken = (t: string) => { try { localStorage.setItem(REFRESH_KEY, t); } catch {} };
@@ -85,15 +91,62 @@ export interface ApiCourse {
   outcomes?: string[]; requirements?: string[]; rating?: number; reviews?: number; students?: number;
   certificate?: boolean; lastUpdated?: string; highlights?: string[];
 }
-export interface ApiUser { id: string; fullName: string; name?: string; email: string; role: string }
+export interface ApiUser { id: string; fullName: string; name?: string; email: string; role: string; createdAt?: string; avatar?: string }
 export interface CourseQueryParams { format?: string; level?: string; category?: string; search?: string; page?: number; limit?: number }
 
+/* Collection endpoints may reply as a bare array or as { <key>: [...], total }.
+   unwrap() accepts either so the dashboard renders against both shapes. */
+function unwrap<T>(key: string, raw: unknown): T[] {
+  if (Array.isArray(raw)) return raw as T[];
+  const list = (raw as Record<string, unknown> | null)?.[key] ?? (raw as Record<string, unknown> | null)?.data;
+  return Array.isArray(list) ? (list as T[]) : [];
+}
+
 /* ── auth ──────────────────────────────────────────────────────────────── */
-export const apiLogin = (email: string, password: string) =>
-  request<{ token: string; user: ApiUser }>('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) });
-export const apiRegister = (fullName: string, email: string, password: string) =>
-  request<{ token: string; user: ApiUser }>('/auth/register', { method: 'POST', body: JSON.stringify({ fullName, email, password }) });
+/* The backend replies { user, accessToken, refreshToken, tokenType }. Older
+   builds replied { token, user }. normaliseAuth() accepts either shape so
+   every caller can rely on `.token`. */
+export interface AuthSession { token: string; refreshToken?: string; user: ApiUser }
+type RawAuth = { user: ApiUser; accessToken?: string; refreshToken?: string; token?: string };
+
+function normaliseAuth(raw: RawAuth): AuthSession {
+  const token = raw.accessToken ?? raw.token;
+  if (!token) throw { message: 'Login succeeded but no access token was returned' } as ApiError;
+  return { token, refreshToken: raw.refreshToken, user: raw.user };
+}
+
+export const apiLogin = async (email: string, password: string): Promise<AuthSession> =>
+  normaliseAuth(await request<RawAuth>('/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }));
+export const apiRegister = async (fullName: string, email: string, password: string): Promise<AuthSession> =>
+  normaliseAuth(await request<RawAuth>('/auth/register', { method: 'POST', body: JSON.stringify({ fullName, email, password }) }));
 export const apiGetMe = () => request<ApiUser>('/me');
+
+/* ── social auth ───────────────────────────────────────────────────────────
+   POST /auth/google   { idToken }
+   POST /auth/linkedin { code, redirectUri }
+   Both reply with the same { user, accessToken, refreshToken } envelope. */
+export const apiGoogleAuth = async (idToken: string): Promise<AuthSession> =>
+  normaliseAuth(await request<RawAuth>('/auth/google', { method: 'POST', body: JSON.stringify({ idToken }) }));
+
+export const apiLinkedInAuth = async (code: string, redirectUri: string): Promise<AuthSession> =>
+  normaliseAuth(await request<RawAuth>('/auth/linkedin', { method: 'POST', body: JSON.stringify({ code, redirectUri }) }));
+
+/* Persists a social sign-in. Writes both `student_access_token` and the plain
+   `accessToken` key so either lookup order resolves the session. */
+export function persistSession(session: AuthSession) {
+  storeStudentToken(session.token);
+  try { localStorage.setItem('accessToken', session.token); } catch {}
+  if (session.refreshToken) storeRefreshToken(session.refreshToken);
+}
+
+/* The spec calls out distinct copy for the two failure modes the backend
+   returns when a social provider isn't wired up or the token is rejected. */
+export function socialAuthMessage(err: unknown): string {
+  const e = err as ApiError | undefined;
+  if (e?.status === 400) return 'Social sign-in not configured server-side.';
+  if (e?.status === 401) return 'Invalid/expired token or unverified email.';
+  return e?.message ?? 'Social sign-in failed. Please try again.';
+}
 
 /* ── courses ───────────────────────────────────────────────────────────── */
 export const apiGetCourses = (params?: CourseQueryParams) => {
@@ -111,6 +164,53 @@ export interface StudentDashboard {
   enrolledCourses: number; completedCourses: number; certificates: number;
   recentActivity: { courseId: string; title: string; progress: number }[];
 }
+
+/* GET /me/courses — the student's enrolments. The backend may reply as a bare
+   array, or wrapped as { courses: [...] } / { data: [...] }, and progress may
+   arrive as `progress`, `percentComplete`, or a completed/total lesson pair.
+   normaliseEnrolment() flattens all of those into one predictable shape. */
+export interface EnrolledCourse {
+  id: string;
+  title: string;
+  progress: number;          /* 0–100 */
+  completedLessons: number;
+  totalLessons: number;
+  status?: string;
+  image?: string;
+  nextLesson?: string;
+  certificateUrl?: string;
+  completedAt?: string;
+  enrolledAt?: string;
+}
+
+type RawEnrolment = Record<string, any>;
+
+function normaliseEnrolment(raw: RawEnrolment): EnrolledCourse {
+  /* Enrolment records often nest the course itself under `course` */
+  const course = raw.course ?? raw;
+  const completed = Number(raw.completedLessons ?? raw.lessonsCompleted ?? 0);
+  const total     = Number(raw.totalLessons ?? raw.lessonCount ?? course.totalLessons ?? 0);
+
+  let progress = Number(raw.progress ?? raw.percentComplete ?? raw.progressPercent ?? NaN);
+  if (!Number.isFinite(progress)) progress = total > 0 ? (completed / total) * 100 : 0;
+
+  return {
+    id:               String(course.id ?? raw.courseId ?? raw.id ?? ''),
+    title:            course.title ?? raw.title ?? 'Untitled course',
+    progress:         Math.max(0, Math.min(100, Math.round(progress))),
+    completedLessons: completed,
+    totalLessons:     total,
+    status:           raw.status ?? course.status,
+    image:            course.image ?? raw.image,
+    nextLesson:       raw.nextLesson ?? raw.nextLessonTitle,
+    certificateUrl:   raw.certificateUrl ?? raw.certificate?.url,
+    completedAt:      raw.completedAt,
+    enrolledAt:       raw.enrolledAt ?? raw.createdAt,
+  };
+}
+
+export const apiGetMyCourses = async (): Promise<EnrolledCourse[]> =>
+  unwrap<RawEnrolment>('courses', await request<unknown>('/me/courses')).map(normaliseEnrolment);
 
 export const apiGetStudentDashboard = () => request<StudentDashboard>('/me/dashboard');
 export const apiGetCourseProgress   = (courseId: string) => request<StudentProgress>(`/me/courses/${courseId}/progress`);
@@ -175,6 +275,7 @@ export interface AdminOrder       { id: string; userId: string; total: number; s
 export interface AdminPayment     { id: string; orderId: string; amount: number; method: string; status: string; createdAt: string; reference?: string }
 export interface AdminLead        { id: string; name: string; email: string; phone?: string; source?: string; createdAt: string }
 export interface AdminAuditLog    { id: string; userId: string; action: string; resource: string; createdAt: string; meta?: Record<string, unknown> }
+export interface AdminUser        { id: string; fullName?: string; name?: string; email: string; role: string; createdAt?: string }
 export interface AdminStats {
   totalRevenue: number; totalOrders: number; totalStudents: number; totalCourses: number;
   revenueByMonth: { month: string; revenue: number }[];
@@ -185,7 +286,8 @@ export interface AdminStats {
 export const adminGetStats      = () => request<AdminStats>('/admin/dashboard/stats');
 export const adminGetCourses    = () => request<AdminCourse[]>('/admin/courses');
 export const adminCreateCourse  = (d: Partial<AdminCourse>) => request<AdminCourse>('/admin/courses', { method: 'POST', body: JSON.stringify(d) });
-export const adminUpdateCourse  = (id: string, d: Partial<AdminCourse>) => request<AdminCourse>(`/admin/courses/${id}`, { method: 'PATCH', body: JSON.stringify(d) });
+export const adminUpdateCourse  = (id: string, d: Partial<AdminCourse>) => request<AdminCourse>(`/admin/courses/${id}`, { method: 'PUT',    body: JSON.stringify(d) });
+export const adminDeleteCourse  = (id: string) => request<void>(`/admin/courses/${id}`, { method: 'DELETE' });
 export const adminPublishCourse = (id: string, published: boolean) => request<AdminCourse>(`/admin/courses/${id}/publish`, { method: 'PATCH', body: JSON.stringify({ published }) });
 export const adminUploadImage   = async (file: File) => { const fd = new FormData(); fd.append('file', file); return upload<{ url: string }>('/admin/uploads', fd); };
 
@@ -207,6 +309,11 @@ export const adminGetQuestions    = (examId: string) => request<AdminQuestion[]>
 export const adminCreateQuestion  = (d: Partial<AdminQuestion>) => request<AdminQuestion>('/admin/questions', { method: 'POST', body: JSON.stringify(d) });
 export const adminUpdateQuestion  = (id: string, d: Partial<AdminQuestion>) => request<AdminQuestion>(`/admin/questions/${id}`, { method: 'PATCH', body: JSON.stringify(d) });
 export const adminImportQuestions = (examId: string, csv: string) => request<{ imported: number }>(`/admin/exams/${examId}/questions/import`, { method: 'POST', body: JSON.stringify({ csv }) });
+
+export const adminGetUsers  = async (page = 1) =>
+  unwrap<AdminUser>('users', await request<unknown>(`/admin/users?page=${page}`));
+export const adminGetOrdersList = async (page = 1) =>
+  unwrap<AdminOrder>('orders', await request<unknown>(`/admin/orders?page=${page}`));
 
 export const adminGetOrders    = (page = 1) => request<{ orders: AdminOrder[]; total: number }>(`/admin/orders?page=${page}`);
 export const adminGetPayments  = (page = 1) => request<{ payments: AdminPayment[]; total: number }>(`/admin/payments?page=${page}`);

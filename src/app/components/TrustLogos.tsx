@@ -52,7 +52,7 @@ export function TrustLogos() {
       className="py-12 overflow-hidden"
       style={{ backgroundColor: 'var(--background)', borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)' }}
     >
-      <div className="max-w-7xl mx-auto px-4 mb-6 text-center">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mb-6 text-center">
         <p style={{ fontSize: '0.7rem', fontWeight: 800, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--muted-foreground)', fontFamily: 'var(--ace-font)' }}>
           Official Certification Partners
         </p>
@@ -76,7 +76,7 @@ export function TrustLogos() {
       </div>
 
       {/* Static grid fallback for reduced-motion / no-JS */}
-      <div className="max-w-7xl mx-auto px-4 mt-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-8">
         
       </div>
     </section>

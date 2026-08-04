@@ -117,7 +117,7 @@ function ExamCard({ exam }: { exam: PracticeExam }) {
         </div>
 
         {/* Stats row */}
-        <div className="grid grid-cols-3 gap-2 mb-4">
+        <div className="grid grid-cols-3 gap-1.5 sm:gap-2 mb-4">
           {[
             { icon: FileText, value: `${exam.questions}`, label: 'Questions' },
             { icon: ClipboardCheck, value: `${exam.exams}`, label: 'Exams' },

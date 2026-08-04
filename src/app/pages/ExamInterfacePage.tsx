@@ -258,7 +258,7 @@ export default function ExamInterfacePage() {
         style={{ backgroundColor: bg, fontFamily: 'var(--ace-font)' }}>
         <motion.div initial={{ y: 24, opacity: 0 }} animate={{ y: 0, opacity: 1 }}
           transition={{ duration: 0.4 }}
-          className="max-w-lg w-full rounded-3xl overflow-hidden shadow-2xl"
+          className="max-w-lg w-full mx-4 rounded-3xl overflow-hidden shadow-2xl"
           style={{ backgroundColor: cardBg, border: `1px solid ${border}` }}>
           <div className="h-32 flex items-center justify-center relative overflow-hidden"
             style={{ background: 'linear-gradient(135deg,#050D1A,#0A1628)' }}>
@@ -269,8 +269,8 @@ export default function ExamInterfacePage() {
             </div>
           </div>
 
-          <div className="p-8">
-            <div className="grid grid-cols-3 gap-4 mb-8">
+          <div className="p-5 sm:p-8">
+            <div className="grid grid-cols-3 gap-2 sm:gap-4 mb-8">
               {[
                 { icon: BookOpen, value: `${questions.length}`, label: 'Questions' },
                 { icon: Clock, value: '90m', label: 'Duration' },
@@ -330,7 +330,7 @@ export default function ExamInterfacePage() {
 
     return (
       <div className="min-h-screen pt-20 sm:pt-24 pb-20 px-4" style={{ backgroundColor: bg, fontFamily: 'var(--ace-font)' }}>
-        <div className="max-w-3xl mx-auto">
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
           <motion.div initial={{ y: 24, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ duration: 0.4 }}>
             {/* Score card */}
             <div className="rounded-3xl overflow-hidden shadow-2xl mb-6"
@@ -412,7 +412,7 @@ export default function ExamInterfacePage() {
 
     return (
       <div className="min-h-screen pt-20 sm:pt-24 pb-20 px-4" style={{ backgroundColor: bg, fontFamily: 'var(--ace-font)' }}>
-        <div className="max-w-2xl mx-auto">
+        <div className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8">
           {/* Nav */}
           <div className="flex items-center justify-between mb-6">
             <button onClick={() => setPhase('results')} className="flex items-center gap-1.5 text-sm hover:opacity-70 transition-opacity" style={{ color: textMuted }}>
@@ -494,7 +494,7 @@ export default function ExamInterfacePage() {
       {/* Fixed top bar */}
       <div className="fixed top-0 left-0 right-0 z-50"
         style={{ backgroundColor: 'var(--background)', borderBottom: `1px solid ${border}`, backdropFilter: 'blur(20px)' }}>
-        <div className="max-w-3xl mx-auto px-4 h-20 flex items-center gap-4">
+        <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center gap-4">
           <div className="flex flex-col justify-center min-w-0">
             <div className="text-xs font-semibold uppercase tracking-widest" style={{ color: textMuted }}>Practice</div>
             <div className="text-sm font-black uppercase tracking-wide truncate" style={{ color: textPrimary }}>{id.toUpperCase()}</div>
@@ -513,7 +513,7 @@ export default function ExamInterfacePage() {
         </div>
       </div>
 
-      <div className="max-w-3xl mx-auto">
+      <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Grid: question nav + question */}
         <div className="grid lg:grid-cols-[220px_1fr] gap-6 items-start">
           {/* Question navigator */}

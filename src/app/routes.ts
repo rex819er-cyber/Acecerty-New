@@ -16,11 +16,33 @@ import StudentDashboardPage from './pages/StudentDashboardPage';
 import MentorshipPage from './pages/MentorshipPage';
 import InternshipPage from './pages/InternshipPage';
 import AdminDashboard from './pages/AdminDashboard';
+import AdminLoginPage from './pages/AdminLoginPage';
+import { AdminRoute } from './components/AdminRoute';
+import LinkedInCallbackPage from './pages/LinkedInCallbackPage';
+import CheckoutCallbackPage from './pages/CheckoutCallbackPage';
 
 export const router = createBrowserRouter([
-  /* Standalone admin portal — completely outside Root layout & auth */
-  { path: '/admin',       Component: AdminDashboard },
-  { path: '/admin/login', Component: AdminDashboard },
+  /* Standalone admin portal — completely outside Root layout & student auth.
+     /admin/login is public; everything else under /admin/* sits behind
+     AdminRoute, which bounces tokenless visitors back to the login gateway. */
+  { path: '/admin/login', Component: AdminLoginPage },
+  {
+    path: '/admin',
+    Component: AdminRoute,
+    children: [
+      { index: true, Component: AdminDashboard },
+    ],
+  },
+
+  /* LinkedIn OAuth return target — standalone so no chrome flashes while the
+     authorization code is being exchanged. Must match the redirect_uri
+     registered in the LinkedIn developer portal. */
+  { path: '/auth/linkedin/callback', Component: LinkedInCallbackPage },
+
+  /* Payment gateway return target — verifies the reference server-side before
+     anything is treated as paid. Register this as the callback/redirect URL in
+     the Paystack / Flutterwave / Stripe dashboards. */
+  { path: '/checkout/callback', Component: CheckoutCallbackPage },
 
   /* Main student app */
   {

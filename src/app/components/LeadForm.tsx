@@ -41,10 +41,10 @@ export function LeadForm() {
             >
               The accelerated learning company for busy IT professionals looking to upskill, fast.
             </h2>
-            <p className="mb-10 leading-relaxed text-muted-foreground" style={{ fontSize: '1.05rem' }}>
+            <p className="mb-10 leading-relaxed text-muted-foreground text-sm sm:text-base">
               Whether you're an individual looking to level up or an enterprise building a security-ready team, our training advisors are ready to help you find the right path.
             </p>
-            <div className="grid grid-cols-3 gap-6">
+            <div className="grid grid-cols-3 gap-4 sm:gap-6">
               {[{ val: '250k+', label: 'Students trained' }, { val: '94%', label: 'Pass rate' }, { val: '27 yrs', label: 'Industry experience' }].map((s) => (
                 null
               ))}

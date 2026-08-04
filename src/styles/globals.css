@@ -33,3 +33,107 @@ body {
   background-color: var(--ace-bg, #09090F);
   transition: background-color 0.3s ease;
 }
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Responsive foundations
+   Gutters, widths and type steps all derive from the tokens in theme.css.
+───────────────────────────────────────────────────────────────────────── */
+
+/* Nothing may produce a horizontal scrollbar. `clip` (unlike `hidden`) does
+   not create a scroll container, so sticky/position:sticky children survive. */
+html,
+body {
+  max-width: 100%;
+  overflow-x: clip;
+}
+
+/* Media and embeds shrink instead of forcing the page wider than the screen. */
+img,
+svg,
+video,
+canvas,
+iframe {
+  max-width: 100%;
+}
+
+/* Flex/grid children default to min-width:auto, which is the usual cause of a
+   layout overflowing on mobile. Long words and URLs also get a break. */
+p,
+h1, h2, h3, h4, h5, h6,
+li,
+label,
+button,
+a {
+  overflow-wrap: break-word;
+}
+
+/* Shared page gutter + width constraint, mirroring <PageContainer>.
+   Available as a class for markup that isn't using the React primitive. */
+.ace-container {
+  width: 100%;
+  max-width: 80rem;              /* = max-w-7xl */
+  margin-inline: auto;
+  padding-inline: 1rem;          /* 16px — never flush to the screen edge */
+}
+@media (min-width: 640px) {
+  .ace-container { padding-inline: 1.5rem; }
+}
+@media (min-width: 1024px) {
+  .ace-container { padding-inline: 2rem; }
+}
+
+/* Centred card shell for auth / payment / confirmation views. */
+.ace-centered {
+  min-height: 100vh;
+  min-height: 100dvh;            /* accounts for mobile browser chrome */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2.5rem 1rem;
+  overflow-x: clip;
+}
+.ace-centered > * {
+  width: 100%;
+  max-width: 28rem;              /* = max-w-md */
+}
+
+/* Fluid headings — scale with the viewport between the token-defined bounds
+   rather than jumping at breakpoints. */
+@layer base {
+  h1 { font-size: clamp(1.5rem, 1.15rem + 1.6vw, 2.25rem); }
+  h2 { font-size: clamp(1.25rem, 1.05rem + 1vw, 1.75rem); }
+  h3 { font-size: clamp(1.075rem, 0.98rem + 0.5vw, 1.25rem); }
+}
+
+/* Inputs must never be under 16px on iOS or Safari zooms the whole page on
+   focus, and 44px is the minimum comfortable tap target. */
+@media (max-width: 640px) {
+  input,
+  select,
+  textarea {
+    font-size: 1rem;
+  }
+  button,
+  [role='button'],
+  a[href].ace-tap {
+    min-height: 44px;
+  }
+}
+
+/* Tables and pre blocks scroll inside themselves rather than widening the page. */
+.ace-scroll-x {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Respect users who ask for less motion. */
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
