@@ -1,14 +1,26 @@
 /* ─────────────────────────────────────────────────────────────────────────
    Admin portal auth helpers
-   • Front-end credential gate for the authorised admin account
-   • admin_access_token persistence lives in lib/api.ts
+
+   The portal signs in as one fixed identity, so the login form only asks for
+   a password. `admin_access_token` persistence lives in lib/api.ts.
+
+   NOTE: ADMIN_PASSWORD ships inside the client bundle and is readable by
+   anyone with devtools. The real protection is the backend rejecting
+   non-admin tokens on /api/admin/* — this gate is a convenience, not
+   security.
 ───────────────────────────────────────────────────────────────────────── */
 import { getAdminToken } from './api';
 
-export const ADMIN_EMAIL    = 'admin@acecerty.com';
-export const ADMIN_PASSWORD = 'Acecerty.admin.access';
+/** The single identity the admin portal authenticates as. */
+export const ADMIN_EMAIL = 'Admin@acecerty.com';
 
-export const isAuthorisedAdmin = (email: string, password: string) =>
-  email.trim().toLowerCase() === ADMIN_EMAIL && password === ADMIN_PASSWORD;
+/** Accepted offline password (same string as the identifier, by design). */
+export const ADMIN_PASSWORD = 'Admin@acecerty.com';
+
+/** Stand-in token used when the backend login is unavailable. */
+export const ADMIN_FALLBACK_TOKEN = 'admin_session_active_token';
+
+/** True when the submitted password matches the hardcoded admin password. */
+export const isAdminPassword = (password: string) => password === ADMIN_PASSWORD;
 
 export const hasAdminSession = () => Boolean(getAdminToken());

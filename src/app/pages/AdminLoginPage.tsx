@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { useNavigate, useLocation, Link, Navigate } from 'react-router';
-import { LayoutDashboard, Eye, EyeOff, ShieldAlert, Wifi, ArrowLeft } from 'lucide-react';
+import { LayoutDashboard, Eye, EyeOff, ShieldAlert, Wifi, ArrowLeft, UserCircle2 } from 'lucide-react';
+import { toast } from 'sonner';
 import { apiLogin, storeAdminToken } from '../lib/api';
-import { isAuthorisedAdmin, hasAdminSession } from '../lib/adminAuth';
+import { ADMIN_EMAIL, ADMIN_FALLBACK_TOKEN, hasAdminSession, isAdminPassword } from '../lib/adminAuth';
 
 /* ── token-driven styling: every value resolves from theme.css ─────────── */
 const inputStyle: React.CSSProperties = {
@@ -23,7 +24,6 @@ export default function AdminLoginPage() {
   /* Where the guard bounced the admin from, so we can send them back */
   const returnTo = (location.state as { returnTo?: string } | null)?.returnTo ?? '/admin';
 
-  const [email, setEmail]       = useState('');
   const [password, setPassword] = useState('');
   const [showPw, setShowPw]     = useState(false);
   const [loading, setLoading]   = useState(false);
@@ -33,30 +33,49 @@ export default function AdminLoginPage() {
   /* Already holding a valid session → skip the form */
   if (hasAdminSession()) return <Navigate to={returnTo} replace />;
 
+  /** Persists the session and enters the dashboard. */
+  function grantAccess(token: string) {
+    storeAdminToken(token);
+    toast.success('Signed in as admin');
+    navigate(returnTo, { replace: true });
+  }
+
+  /**
+   * The portal always authenticates as ADMIN_EMAIL, so only a password is
+   * collected. A real backend session is preferred — it yields a JWT the
+   * /api/admin/* endpoints will actually accept — and the hardcoded password
+   * is the offline fallback when the backend is unreachable or hasn't been
+   * given this account.
+   */
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
 
-    /* Step 1 — front-end gate for the authorised admin account */
-    if (!isAuthorisedAdmin(email, password)) {
-      setError('Unauthorized access: invalid admin email or password.');
-      return;
-    }
+    const matchesLocal = isAdminPassword(password);
 
-    /* Step 2 — live credential exchange against the backend */
     setLoading(true); setSlow(false);
     const slowTimer = setTimeout(() => setSlow(true), 2500);
     try {
-      const session = await apiLogin(email.trim(), password);
+      const session = await apiLogin(ADMIN_EMAIL, password);
       clearTimeout(slowTimer); setSlow(false);
+
       if (session.user.role !== 'admin') {
         throw new Error('Access denied — this account does not have admin privileges.');
       }
-      storeAdminToken(session.token);
-      navigate(returnTo, { replace: true });
+      grantAccess(session.token);
     } catch (err: unknown) {
       clearTimeout(slowTimer); setSlow(false);
-      setError((err as { message?: string })?.message ?? 'Login failed. Please try again.');
+
+      /* Backend rejected or was unreachable — accept the hardcoded password. */
+      if (matchesLocal) {
+        grantAccess(ADMIN_FALLBACK_TOKEN);
+        return;
+      }
+      const message = (err as { status?: number; message?: string })?.status === 401
+        ? 'Invalid password'
+        : (err as { message?: string })?.message ?? 'Invalid password';
+      setError(message);
+      toast.error(message);
     } finally {
       setLoading(false);
     }
@@ -113,14 +132,35 @@ export default function AdminLoginPage() {
           )}
 
           <form onSubmit={submit}>
-            <div style={{ marginBottom: 14 }}>
-              <label style={labelStyle} htmlFor="admin-email">Admin Email</label>
-              <input
-                id="admin-email" style={inputStyle} type="email" required autoFocus
-                autoComplete="username" placeholder="admin@acecerty.com"
-                value={email} onChange={e => { setEmail(e.target.value); setError(''); }}
-              />
+            {/* Fixed identity — the portal only ever signs in as one account,
+                so the email is stated rather than asked for. */}
+            <div
+              style={{
+                display: 'flex', alignItems: 'center', gap: 12, marginBottom: 18,
+                padding: '12px 14px', borderRadius: 'var(--ace-radius-md)',
+                background: 'var(--input-background)', border: '1px solid var(--border)',
+              }}
+            >
+              <UserCircle2 size={22} style={{ color: 'var(--ace-brand)', flexShrink: 0 }} />
+              <div style={{ minWidth: 0 }}>
+                <div className="text-xs" style={{ color: 'var(--muted-foreground)', fontFamily: 'var(--ace-font)' }}>
+                  Logging in as Admin
+                </div>
+                <div
+                  className="text-sm"
+                  style={{
+                    color: 'var(--foreground)', fontFamily: 'var(--ace-font)', fontWeight: 600,
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                  }}
+                >
+                  {ADMIN_EMAIL}
+                </div>
+              </div>
             </div>
+
+            {/* The email is submitted for the browser's password manager but
+                never shown or edited. */}
+            <input type="hidden" name="email" autoComplete="username" value={ADMIN_EMAIL} readOnly />
 
             <div style={{ marginBottom: 14 }}>
               <label style={labelStyle} htmlFor="admin-password">Password</label>
