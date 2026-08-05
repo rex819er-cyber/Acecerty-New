@@ -7,10 +7,10 @@ import { toast } from 'sonner';
 import { useAuth } from '../context/AuthContext';
 import { PageContainer, PageShell, CenteredCard } from '../components/layout/PageLayout';
 import {
-  NotAuthenticatedError, extractAuthorizationUrl, getActiveToken,
-  resolveGateway, startCheckout,
+  NotAuthenticatedError, getActiveToken, resolveProvider, startCheckout,
 } from '../lib/payments';
-import type { UiPayOption } from '../lib/payments';
+import type { UiPayOption, CheckoutLine } from '../lib/payments';
+import { formatPrice } from '../lib/api';
 
 type PayMethod = 'card' | 'paystack' | 'flutterwave';
 
@@ -67,6 +67,10 @@ function InputField({ label, type = 'text', placeholder, value, onChange, error,
 
 export default function CheckoutPage() {
   const { items, subtotal, removeFromCart, clearCart } = useCart();
+  /* Every course in the cart should share one geo-resolved currency; fall back
+     to the first item's (or NGN) if that's ever not the case. The order total
+     charged is always recomputed server-side — this is display only. */
+  const cartCurrency = items[0]?.course.currency ?? 'NGN';
   const { isAuthenticated } = useAuth();
   const navigate = useNavigate();
 
@@ -113,38 +117,38 @@ export default function CheckoutPage() {
   }
 
   /**
-   * Runs the authorized checkout: token gate → POST /api/orders/checkout →
-   * redirect to the gateway's authorization URL.
+   * Runs the authorized checkout: token gate → POST /api/orders →
+   * POST /api/orders/:id/pay → redirect to the gateway's checkout URL.
+   *
+   * The order carries every cart line, not just the first: each line names the
+   * catalog it came from via `itemType` (courses default to 'course', the
+   * voucher and practice-exam pages tag their own).
    */
   async function runCheckout(option: UiPayOption) {
     /* 1 — pre-checkout token check. No token means no network call at all. */
     const token = getActiveToken();
     if (!token) { requireSignIn(); return; }
 
-    const courseId = items[0]?.course.id;
-    if (!courseId) { setApiError('Your cart is empty.'); return; }
+    const lines: CheckoutLine[] = items.map(i => ({
+      itemType: i.course.itemType ?? 'course',
+      itemId:   i.course.id,
+    }));
+    if (lines.length === 0) { setApiError('Your cart is empty.'); return; }
 
     setLoading(true); setApiError(''); setSlowConn(false);
     const slowTimer = setTimeout(() => setSlowConn(true), 2500);
 
     try {
-      /* 2 — checkout execution */
-      const res = await startCheckout({
-        courseId,
-        ...resolveGateway(option),
-        /* Sent for multi-item carts; backends that only read `courseId` ignore it. */
-        courseIds: items.map(i => i.course.id),
-        email: form.email || undefined,
-        amount: total,
-      });
+      /* 2 — checkout execution. Totals are re-derived server-side from the
+         catalog, so the client's VAT-inclusive figure is display-only. */
+      const res = await startCheckout({ items: lines, provider: resolveProvider(option) });
       clearTimeout(slowTimer); setSlowConn(false);
 
-      const authorizationUrl = extractAuthorizationUrl(res);
-      if (authorizationUrl) {
-        setPayUrl(authorizationUrl);
+      if (res.checkoutUrl) {
+        setPayUrl(res.checkoutUrl);
         setStep('redirect');
         /* The gateway returns the buyer to /checkout/callback?reference=… */
-        setTimeout(() => { window.location.href = authorizationUrl; }, 1200);
+        setTimeout(() => { window.location.href = res.checkoutUrl; }, 1200);
       } else {
         /* Gateway settled inline — nothing to redirect to. */
         clearCart();
@@ -379,7 +383,7 @@ export default function CheckoutPage() {
                     <button onClick={handlePay} disabled={loading} style={{ width: '100%', padding: '14px 0', borderRadius: 14, border: 'none', background: 'var(--ace-brand)', color: '#fff', fontWeight: 700, fontFamily: 'var(--ace-font)', cursor: loading ? 'not-allowed' : 'pointer', fontSize: '0.95rem', opacity: loading ? 0.7 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 16 }}>
                       {loading
                         ? <><span style={{ width: 18, height: 18, border: '2px solid #fff', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.7s linear infinite', display: 'inline-block' }} />Processing…</>
-                        : <><Lock size={15} />Complete Enrolment — ₦{total.toLocaleString()}</>}
+                        : <><Lock size={15} />Complete Enrolment — {formatPrice(total, cartCurrency)}</>}
                     </button>
                     <style>{`@keyframes spin{to{transform:rotate(360deg)}}`}</style>
 
@@ -410,16 +414,16 @@ export default function CheckoutPage() {
                     <p style={{ fontSize: '0.75rem', color: 'var(--muted-foreground)', fontFamily: 'var(--ace-font)' }}>{course.duration}</p>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, flexShrink: 0 }}>
-                    <span style={{ fontSize: '0.875rem', fontWeight: 700, color: 'var(--foreground)', fontFamily: 'var(--ace-font)' }}>₦{course.price.toLocaleString()}</span>
+                    <span style={{ fontSize: '0.875rem', fontWeight: 700, color: 'var(--foreground)', fontFamily: 'var(--ace-font)' }}>{formatPrice(course.price, course.currency ?? cartCurrency)}</span>
                     <button onClick={() => removeFromCart(course.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted-foreground)' }}><X size={13} /></button>
                   </div>
                 </div>
               ))}
             </div>
             <div style={{ borderTop: '1px solid var(--border)', paddingTop: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem', color: 'var(--muted-foreground)', fontFamily: 'var(--ace-font)' }}><span>Subtotal</span><span>₦{subtotal.toLocaleString()}</span></div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem', color: 'var(--muted-foreground)', fontFamily: 'var(--ace-font)' }}><span>VAT (7.5%)</span><span>₦{vat.toLocaleString()}</span></div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 800, color: 'var(--foreground)', fontFamily: 'var(--ace-font)', marginTop: 4 }}><span>Total</span><span style={{ color: 'var(--ace-brand)' }}>₦{total.toLocaleString()}</span></div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem', color: 'var(--muted-foreground)', fontFamily: 'var(--ace-font)' }}><span>Subtotal</span><span>{formatPrice(subtotal, cartCurrency)}</span></div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.875rem', color: 'var(--muted-foreground)', fontFamily: 'var(--ace-font)' }}><span>VAT (7.5%)</span><span>{formatPrice(vat, cartCurrency)}</span></div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 800, color: 'var(--foreground)', fontFamily: 'var(--ace-font)', marginTop: 4 }}><span>Total</span><span style={{ color: 'var(--ace-brand)' }}>{formatPrice(total, cartCurrency)}</span></div>
             </div>
             <div style={{ marginTop: 16, background: 'rgba(0,162,182,0.06)', borderRadius: 12, padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 10 }}>
               <Shield size={16} style={{ color: 'var(--ace-brand)', flexShrink: 0 }} />

@@ -11,62 +11,6 @@ import type { ApiMentor } from '../lib/api';
 
 /* ─── Mock mentors (fallback) ──────────────────────────────────────── */
 
-const MOCK_MENTORS: ApiMentor[] = [
-  {
-    id: 'm1',
-    name: 'Dr. Ade Okonkwo',
-    title: 'Senior Cybersecurity Architect',
-    specialties: ['CISSP', 'CISM', 'Penetration Testing', 'Zero Trust'],
-    bio: 'Former CISO with 18 years in financial sector security. Certified in CISSP, CISM, and CEH. Guided 300+ students to certification success.',
-    rating: 4.9,
-    sessions: 420,
-  },
-  {
-    id: 'm2',
-    name: 'Fatima Al-Hassan',
-    title: 'Cloud Solutions Architect — AWS & Azure',
-    specialties: ['AWS SAA', 'AZ-104', 'FinOps', 'Cloud Migration'],
-    bio: 'Dual-certified cloud architect who has led large-scale migrations for Fortune 500 clients. Specialises in hybrid cloud and FinOps strategy.',
-    rating: 4.8,
-    sessions: 310,
-  },
-  {
-    id: 'm3',
-    name: 'Emeka Nwosu',
-    title: 'Cisco Networking & DevNet Expert',
-    specialties: ['CCNA', 'CCNP', 'DevNet', 'Network Automation'],
-    bio: 'Cisco-certified network engineer with 12 years in enterprise environments. Passionate about automation, SDN, and accelerating CCNA/CCNP candidates.',
-    rating: 4.9,
-    sessions: 280,
-  },
-  {
-    id: 'm4',
-    name: 'Amara Diallo',
-    title: 'PMP & Agile Coach',
-    specialties: ['PMP', 'PMI-ACP', 'Scrum Master', 'Agile Transformation'],
-    bio: 'Certified PMP and Agile practitioner who has delivered programmes across West Africa and Europe. Expert in Agile transformation and PMI exam strategy.',
-    rating: 4.7,
-    sessions: 195,
-  },
-  {
-    id: 'm5',
-    name: 'Chidi Eze',
-    title: 'Linux & DevOps Engineer',
-    specialties: ['Linux+', 'CKA', 'Docker', 'CI/CD Pipelines'],
-    bio: 'Open-source contributor and Linux Foundation certified administrator. Specialises in Kubernetes, containerisation, and DevOps pipeline design.',
-    rating: 4.8,
-    sessions: 230,
-  },
-  {
-    id: 'm6',
-    name: 'Yetunde Adeyemi',
-    title: 'CompTIA Security & A+ Specialist',
-    specialties: ['Security+', 'A+', 'Network+', 'CySA+'],
-    bio: 'Dedicated to helping career-changers break into IT. Has coached hundreds of beginners from zero to certified across CompTIA\'s core pathway.',
-    rating: 4.9,
-    sessions: 510,
-  },
-];
 
 const SPECIALTY_ICON: Record<string, React.ElementType> = {
   CISSP: Shield,   CISM: Shield,  Security: Shield,
@@ -319,7 +263,7 @@ export default function MentorshipPage() {
     [],
   );
 
-  const mentors: ApiMentor[] = (data && data.length > 0) ? data : MOCK_MENTORS;
+  const mentors: ApiMentor[] = data ?? [];
 
   const HOW_IT_WORKS = [
     { step: '01', title: 'Browse Mentors', desc: 'Filter by certification, specialty, or availability.' },
@@ -353,14 +297,6 @@ export default function MentorshipPage() {
             <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '1.05rem', maxWidth: 520, marginBottom: 28, fontFamily: 'var(--ace-font)' }}>
               1-on-1 sessions with certified professionals who have passed the exact exams you're targeting. Get there faster.
             </p>
-            <div className="flex flex-wrap gap-6">
-              {[['150+', 'Active Mentors'], ['4.8★', 'Average Rating'], ['12,000+', 'Sessions Completed'], ['94%', 'Pass Rate']].map(([val, label]) => (
-                <div key={label}>
-                  <p className="text-white" style={{ fontSize: '1.5rem', fontWeight: 900, lineHeight: 1, fontFamily: 'var(--ace-font)' }}>{val}</p>
-                  <p style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.45)', marginTop: 2, fontFamily: 'var(--ace-font)' }}>{label}</p>
-                </div>
-              ))}
-            </div>
           </motion.div>
         </div>
       </div>
@@ -457,8 +393,7 @@ export default function MentorshipPage() {
             <div className="flex flex-col gap-3">
               <div className="rounded-2xl p-5" style={{ backgroundColor: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)' }}>
                 <p className="text-white" style={{ fontWeight: 700, fontSize: '0.92rem', marginBottom: 2, fontFamily: 'var(--ace-font)' }}>Single Session</p>
-                <p style={{ fontSize: '1.6rem', fontWeight: 900, color: 'var(--ace-brand)', lineHeight: 1.1, fontFamily: 'var(--ace-font)' }}>₦15,000</p>
-                <p style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.45)', marginBottom: 12, fontFamily: 'var(--ace-font)' }}>60-minute deep dive</p>
+                <p style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.45)', marginBottom: 12, marginTop: 6, fontFamily: 'var(--ace-font)' }}>60-minute deep dive</p>
                 <button
                   onClick={() => setBookingMentor(mentors[0] ?? null)}
                   className="w-full py-3 rounded-xl font-bold text-white transition-all active:scale-95"
@@ -469,8 +404,7 @@ export default function MentorshipPage() {
               </div>
               <div className="rounded-2xl p-5" style={{ backgroundColor: 'rgba(0,162,182,0.12)', border: '1px solid rgba(0,162,182,0.25)' }}>
                 <p className="text-white" style={{ fontWeight: 700, fontSize: '0.92rem', marginBottom: 2, fontFamily: 'var(--ace-font)' }}>5-Session Bundle</p>
-                <p style={{ fontSize: '1.6rem', fontWeight: 900, color: 'var(--ace-brand)', lineHeight: 1.1, fontFamily: 'var(--ace-font)' }}>₦60,000</p>
-                <p style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.45)', marginBottom: 12, fontFamily: 'var(--ace-font)' }}>Save ₦15,000 vs single sessions</p>
+                <p style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.45)', marginBottom: 12, marginTop: 6, fontFamily: 'var(--ace-font)' }}>Five 60-minute sessions</p>
                 <button
                   onClick={() => setBookingMentor(mentors[0] ?? null)}
                   className="w-full py-3 rounded-xl font-bold text-white transition-all active:scale-95"

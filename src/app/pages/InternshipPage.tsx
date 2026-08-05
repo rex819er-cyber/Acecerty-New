@@ -10,48 +10,6 @@ import type { ApiInternshipTrack } from '../lib/api';
 
 /* ─── Mock tracks (fallback) ────────────────────────────────────────── */
 
-const MOCK_TRACKS: ApiInternshipTrack[] = [
-  {
-    id: 'int-cyber',
-    title: 'Cybersecurity Analyst Track',
-    description: 'Gain real-world experience in threat detection, vulnerability assessments, SIEM analysis, and incident response within a supervised security operations environment.',
-    duration: '12 Weeks',
-    spots: 8,
-    requirements: ['CompTIA Security+ or equivalent', 'Basic networking knowledge', 'Strong analytical mindset', 'Available 20+ hrs/week'],
-  },
-  {
-    id: 'int-cloud',
-    title: 'Cloud Infrastructure Track',
-    description: 'Work on live cloud deployments across AWS and Azure. Tasks include infrastructure-as-code, container orchestration with Kubernetes, and cloud cost optimisation.',
-    duration: '12 Weeks',
-    spots: 6,
-    requirements: ['AWS or Azure fundamentals', 'Basic Linux/CLI experience', 'Interest in DevOps practices', 'Available 20+ hrs/week'],
-  },
-  {
-    id: 'int-dev',
-    title: 'Software Development Track',
-    description: 'Build production-ready features on real projects. Work with React, Node.js, and Python in an Agile team environment with code review, CI/CD, and sprint rituals.',
-    duration: '16 Weeks',
-    spots: 5,
-    requirements: ['Proficiency in at least one language (JS, Python, etc.)', 'Basic Git/version control', 'Portfolio or personal projects preferred'],
-  },
-  {
-    id: 'int-pm',
-    title: 'IT Project Management Track',
-    description: 'Shadow senior project managers on live engagements. Draft project charters, manage stakeholder communication, and apply PMBOK and Agile Scrum methodologies.',
-    duration: '10 Weeks',
-    spots: 4,
-    requirements: ['Familiarity with PMBOK or Agile', 'Excellent communication skills', 'PMP or CSM enrolment preferred', 'Detail-oriented mindset'],
-  },
-  {
-    id: 'int-data',
-    title: 'Data & AI Analytics Track',
-    description: 'Apply machine learning and data analytics to real business problems. Work with Python, SQL, and BI tooling to surface insights that drive actual decisions.',
-    duration: '12 Weeks',
-    spots: 6,
-    requirements: ['Python or R proficiency', 'SQL fundamentals', 'Statistics background helpful', 'Curiosity-driven learning style'],
-  },
-];
 
 const TRACK_ICON: Record<string, React.ElementType> = {
   'int-cyber': Shield,
@@ -311,7 +269,7 @@ export default function InternshipPage() {
     [],
   );
 
-  const tracks: ApiInternshipTrack[] = (data && data.length > 0) ? data : MOCK_TRACKS;
+  const tracks: ApiInternshipTrack[] = data ?? [];
 
   const BENEFITS = [
     { icon: '🏆', title: 'Real Projects', desc: 'Work on live production systems, not toy demos.' },
@@ -340,14 +298,6 @@ export default function InternshipPage() {
             <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '1.05rem', maxWidth: 520, marginBottom: 28, fontFamily: 'var(--ace-font)' }}>
               Hands-on, remote internship tracks across Cybersecurity, Cloud, Development, Project Management, and Data. Build a portfolio, earn a certificate, and launch your career.
             </p>
-            <div className="flex flex-wrap gap-6">
-              {[['5', 'Active Tracks'], ['12–16 wks', 'Duration'], ['100%', 'Remote'], ['Certified', 'On Completion']].map(([val, label]) => (
-                <div key={label}>
-                  <p className="text-white" style={{ fontSize: '1.5rem', fontWeight: 900, lineHeight: 1, fontFamily: 'var(--ace-font)' }}>{val}</p>
-                  <p style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.45)', marginTop: 2, fontFamily: 'var(--ace-font)' }}>{label}</p>
-                </div>
-              ))}
-            </div>
           </motion.div>
         </div>
       </div>

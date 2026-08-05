@@ -2,128 +2,49 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router';
 import {
   Clock, ChevronLeft, ChevronRight, Flag, CheckCircle2,
-  XCircle, BarChart2, BookOpen, RotateCcw, Home, AlertCircle,
+  XCircle, BarChart2, BookOpen, RotateCcw, Home, AlertCircle, Wifi, Loader2,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import {
+  apiGetExamProduct, apiStartAttempt, apiAnswerItem, apiSubmitAttempt,
+  apiGetAttemptReview,
+} from '../lib/api';
+import type {
+  ExamProductDetail, AttemptInProgress, AttemptResults, AttemptReviewItem,
+} from '../lib/api';
 
-/* ── Question bank (sample for demo) ───────────────────────────── */
-interface Question {
-  id: number;
+/* ─────────────────────────────────────────────────────────────────────────
+   The exam is server-authoritative: the backend owns the question order, the
+   option shuffle, the countdown and the grading. This page therefore holds no
+   answer key and no question bank — it renders whatever the attempt payload
+   contains and mirrors every selection back with
+   PATCH /attempts/:id/items/:questionId.
+
+   If no attempt can be created (no published exam form, or a signed-out
+   visitor) the page says so rather than inventing questions.
+───────────────────────────────────────────────────────────────────────── */
+
+/* ── Question shape rendered from an attempt payload ─────────────── */
+interface UiQuestion {
+  id: string;
   domain: string;
   text: string;
-  options: string[];
-  correct: number;
-  explanation: string;
-}
-
-const QUESTION_BANKS: Record<string, Question[]> = {
-  default: [
-    {
-      id: 1, domain: 'Security & Risk Management',
-      text: 'Which of the following BEST describes the principle of least privilege?',
-      options: [
-        'Users should have access to all resources needed to perform any task',
-        'Users are granted only the minimum permissions required to perform their job functions',
-        'All users share the same access level to ensure consistency',
-        'Privileged accounts are shared among administrators for efficiency',
-      ],
-      correct: 1,
-      explanation: 'The principle of least privilege states that a user, process, or system should be granted only the minimum level of access rights necessary to perform their functions. This limits the potential damage from errors, attacks, or insider threats.',
-    },
-    {
-      id: 2, domain: 'Cryptography & PKI',
-      text: 'Which asymmetric encryption algorithm is commonly used for digital signatures and key exchange in SSL/TLS?',
-      options: ['AES-256', 'RSA', '3DES', 'SHA-256'],
-      correct: 1,
-      explanation: 'RSA (Rivest–Shamir–Adleman) is the most widely used asymmetric encryption algorithm for digital signatures and key exchange in SSL/TLS. SHA-256 is a hashing algorithm, and AES/3DES are symmetric ciphers.',
-    },
-    {
-      id: 3, domain: 'Network Security',
-      text: 'A stateful firewall differs from a packet-filtering firewall in that it:',
-      options: [
-        'Filters packets only at Layer 3 based on IP addresses',
-        'Tracks the state of active connections and allows return traffic automatically',
-        'Inspects application-layer content for malicious payloads',
-        'Requires manual rules for every inbound and outbound connection',
-      ],
-      correct: 1,
-      explanation: 'A stateful firewall maintains a connection state table and tracks active sessions. This allows it to automatically permit return traffic for established connections without explicit rules, unlike packet-filtering firewalls.',
-    },
-    {
-      id: 4, domain: 'Identity & Access Management',
-      text: 'Which authentication factor category does a fingerprint scan belong to?',
-      options: ['Something you know', 'Something you have', 'Something you are', 'Somewhere you are'],
-      correct: 2,
-      explanation: 'Biometric factors such as fingerprints, retina scans, and voice recognition fall under "something you are" — the inherence factor. Passwords are "something you know" and smart cards are "something you have".',
-    },
-    {
-      id: 5, domain: 'Incident Response',
-      text: 'During which phase of the incident response lifecycle is eradication of malware performed?',
-      options: ['Identification', 'Containment', 'Eradication', 'Lessons Learned'],
-      correct: 2,
-      explanation: 'The Eradication phase involves removing malware, closing vulnerabilities, and rebuilding systems after an incident has been contained. It follows Identification and Containment in the NIST incident response lifecycle.',
-    },
-    {
-      id: 6, domain: 'Security Architecture',
-      text: 'Which security model enforces mandatory access control by preventing subjects from writing to objects at a lower security level?',
-      options: ['Bell-LaPadula Model', 'Biba Integrity Model', 'Clark-Wilson Model', 'Brewer-Nash Model'],
-      correct: 0,
-      explanation: 'The Bell-LaPadula model is focused on confidentiality and enforces "no write-down" (subjects cannot write to lower classification objects) and "no read-up" rules. Biba focuses on integrity, not confidentiality.',
-    },
-    {
-      id: 7, domain: 'Asset Security',
-      text: 'Which data destruction method provides the HIGHEST assurance that data cannot be recovered from a hard drive?',
-      options: ['Overwriting with zeros', 'Degaussing', 'Physical destruction / shredding', 'Quick format'],
-      correct: 2,
-      explanation: 'Physical destruction (shredding or incineration) provides the highest assurance of data destruction as the media is completely rendered unusable. Degaussing is effective for magnetic media but not SSDs; overwriting can leave traces on SSDs.',
-    },
-    {
-      id: 8, domain: 'Software Security',
-      text: 'Which of the following BEST prevents SQL injection attacks?',
-      options: [
-        'Encrypting the database at rest',
-        'Using parameterised queries and prepared statements',
-        'Implementing a web application firewall only',
-        'Hashing all user inputs before processing',
-      ],
-      correct: 1,
-      explanation: 'Parameterised queries (prepared statements) are the most effective defence against SQL injection as they separate code from data. A WAF provides an additional layer but is not the primary prevention control.',
-    },
-    {
-      id: 9, domain: 'Cloud Security',
-      text: 'In the shared responsibility model for IaaS, which of the following is the cloud customer\'s responsibility?',
-      options: [
-        'Physical security of the data centre',
-        'Hypervisor and virtualisation layer security',
-        'Operating system patching and application security',
-        'Network hardware maintenance',
-      ],
-      correct: 2,
-      explanation: 'In IaaS, the cloud provider manages physical infrastructure, networking hardware, and virtualisation. The customer is responsible for OS patching, application security, data security, and IAM configuration.',
-    },
-    {
-      id: 10, domain: 'Governance & Compliance',
-      text: 'An organisation processes personal data of EU residents. Which regulation primarily governs their data protection obligations?',
-      options: ['HIPAA', 'GDPR', 'PCI DSS', 'SOX'],
-      correct: 1,
-      explanation: 'The General Data Protection Regulation (GDPR) governs processing of personal data of EU residents, regardless of where the processing organisation is located. HIPAA is US healthcare-specific, PCI DSS covers payment card data, and SOX covers financial reporting.',
-    },
-  ],
-};
-
-function getQuestions(examId: string): Question[] {
-  return QUESTION_BANKS[examId] ?? QUESTION_BANKS.default;
+  options: { id: string; text: string }[];
 }
 
 /* ── Timer ──────────────────────────────────────────────────────── */
-function useTimer(initialSeconds: number, running: boolean) {
-  const [seconds, setSeconds] = useState(initialSeconds);
+/* Counts down to a wall-clock deadline rather than decrementing a counter, so
+   a backgrounded tab or a slow frame can't drift away from the server's
+   expiresAt. */
+function useDeadlineTimer(deadline: number | null, running: boolean) {
+  const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
-    if (!running || seconds <= 0) return;
-    const id = setInterval(() => setSeconds((s) => s - 1), 1000);
+    if (!running || deadline === null) return;
+    const id = setInterval(() => setNow(Date.now()), 500);
     return () => clearInterval(id);
-  }, [running, seconds]);
-  return seconds;
+  }, [running, deadline]);
+  if (deadline === null) return 0;
+  return Math.max(0, Math.round((deadline - now) / 1000));
 }
 
 function formatTime(s: number) {
@@ -140,7 +61,7 @@ function CircularTimer({ timeLeft, totalTime }: { timeLeft: number; totalTime: n
   const STROKE = 4.5;
   const R = (SIZE - STROKE) / 2;
   const CIRC = 2 * Math.PI * R;
-  const fraction = Math.max(0, timeLeft / totalTime);
+  const fraction = totalTime > 0 ? Math.max(0, timeLeft / totalTime) : 0;
   const offset = CIRC * (1 - fraction);
   const urgent = timeLeft < 300;
   const warning = timeLeft < 900;
@@ -196,17 +117,33 @@ export default function ExamInterfacePage() {
   const { id = 'cissp' } = useParams<{ id: string }>();
   const navigate = useNavigate();
 
-  const questions = getQuestions(id);
-  const DURATION = 90 * 60; // 90 minutes
-
   const [phase, setPhase] = useState<Phase>('start');
-  const [current, setCurrent] = useState(0);
-  const [answers, setAnswers] = useState<(number | null)[]>(Array(questions.length).fill(null));
-  const [flagged, setFlagged] = useState<Set<number>>(new Set());
-  const [reviewIdx, setReviewIdx] = useState(0);
-  const [timerRunning, setTimerRunning] = useState(false);
 
-  const timeLeft = useTimer(DURATION, timerRunning);
+  /* Catalog */
+  const [product, setProduct]         = useState<ExamProductDetail | null>(null);
+  const [catalogLoading, setCatLoad]  = useState(true);
+  const [catalogSlow, setCatSlow]     = useState(false);
+
+  /* Attempt */
+  const [attemptId, setAttemptId]     = useState<string | null>(null);
+  const [questions, setQuestions]     = useState<UiQuestion[]>([]);
+  const [answers, setAnswers]         = useState<Record<string, string | null>>({});
+  const [flagged, setFlagged]         = useState<Set<string>>(new Set());
+  const [deadline, setDeadline]       = useState<number | null>(null);
+  const [totalTime, setTotalTime]     = useState(0);
+  const [passMark, setPassMark]       = useState(70);
+
+  /* Outcome */
+  const [results, setResults]         = useState<AttemptResults | null>(null);
+  const [reviewItems, setReviewItems] = useState<AttemptReviewItem[] | null>(null);
+
+  const [current, setCurrent]         = useState(0);
+  const [reviewIdx, setReviewIdx]     = useState(0);
+  const [starting, setStarting]       = useState(false);
+  const [submitting, setSubmitting]   = useState(false);
+  const [error, setError]             = useState('');
+
+  const timeLeft = useDeadlineTimer(deadline, phase === 'exam');
 
   const bg = 'var(--background)';
   const cardBg = 'var(--card)';
@@ -214,45 +151,184 @@ export default function ExamInterfacePage() {
   const textPrimary = 'var(--foreground)';
   const textMuted = 'var(--muted-foreground)';
 
-  const answered = answers.filter((a) => a !== null).length;
-  const score = answers.reduce((sum, a, i) => (a === questions[i].correct ? sum + 1 : sum), 0);
-  const pct = Math.round((score / questions.length) * 100);
-  const passed = pct >= 70;
+  /* ── Catalog lookup ───────────────────────────────────────────── */
+  /* GET /api/exam-products/:slugOrCode — the backend also resolves cert codes
+     (e.g. `SY0-701`), and surfaces freeDemoExamId for the free attempt. */
+  useEffect(() => {
+    let cancelled = false;
+    setCatLoad(true); setCatSlow(false);
+    const slow = setTimeout(() => !cancelled && setCatSlow(true), 2500);
+    apiGetExamProduct(id)
+      .then((p) => {
+        if (cancelled) return;
+        setProduct(p);
+        setPassMark(p.passMark ?? 70);
+      })
+      .catch(() => { /* falls back to the local sample bank */ })
+      .finally(() => { clearTimeout(slow); if (!cancelled) { setCatLoad(false); setCatSlow(false); } });
+    return () => { cancelled = true; clearTimeout(slow); };
+  }, [id]);
 
-  function startExam() {
-    setPhase('exam');
-    setTimerRunning(true);
+  /* The exam form an attempt is started against: the free demo if published,
+     otherwise the first published form. */
+  const examFormId = product?.freeDemoExamId ?? product?.exams?.[0]?.id ?? null;
+
+  /* ── Start ────────────────────────────────────────────────────── */
+  /* There is no local question bank: an attempt only exists if the backend
+     creates one. Without a published exam form there is nothing to sit. */
+  async function startExam() {
+    setError('');
+
+    if (!examFormId) {
+      setError('This exam has no published question set yet. Please check back soon.');
+      return;
+    }
+
+    setStarting(true);
+    try {
+      /* POST /api/exams/:examId/attempts */
+      const payload: AttemptInProgress = await apiStartAttempt(examFormId);
+      applyAttempt(payload);
+      setPhase('exam');
+    } catch (err: unknown) {
+      const e = err as { message?: string; status?: number };
+      setError(
+        e?.status === 401
+          ? 'Please sign in to take a practice exam.'
+          : e?.message ?? 'Could not start the exam. Please try again.',
+      );
+    } finally {
+      setStarting(false);
+    }
   }
 
-  function submitExam() {
-    setTimerRunning(false);
-    setPhase('results');
-  }
+  /* Loads an attempt payload into local state. The countdown is anchored on the
+     server's own clock (expiresAt − serverTime) so a skewed device clock or a
+     slow response can't hand the candidate extra time. */
+  function applyAttempt(payload: AttemptInProgress) {
+    const { attempt, questions: qs } = payload;
+    setAttemptId(attempt.id);
+    setQuestions(qs.map((q) => ({
+      id: q.questionId,
+      domain: q.topic ?? 'General',
+      text: q.text,
+      options: q.options,
+    })));
+    setAnswers(Object.fromEntries(qs.map((q) => [q.questionId, q.selectedOptionId])));
+    setFlagged(new Set(qs.filter((q) => q.flagged).map((q) => q.questionId)));
+    setPassMark(attempt.passMark ?? 70);
 
-  function restart() {
-    setAnswers(Array(questions.length).fill(null));
-    setFlagged(new Set());
+    const remainingMs = new Date(attempt.expiresAt).getTime() - new Date(attempt.serverTime).getTime();
+    setDeadline(Date.now() + Math.max(0, remainingMs));
+    setTotalTime((attempt.durationMinutes ?? 90) * 60);
     setCurrent(0);
-    setPhase('start');
-    setTimerRunning(false);
+    setResults(null);
+    setReviewItems(null);
+  }
+
+  /* ── Answer / flag (mirrored to the server) ───────────────────── */
+  const persist = useCallback(
+    (questionId: string, body: { selectedOptionId?: string | null; flagged?: boolean }) => {
+      if (!attemptId) return;
+      /* Fire-and-forget: local state is already updated, and a dropped PATCH is
+         recovered on submit because the server re-reads its own items. */
+      apiAnswerItem(attemptId, questionId, body).catch(() => {});
+    },
+    [attemptId],
+  );
+
+  function selectAnswer(optionId: string) {
+    const q = questions[current];
+    if (!q) return;
+    setAnswers((prev) => ({ ...prev, [q.id]: optionId }));
+    persist(q.id, { selectedOptionId: optionId });
   }
 
   function toggleFlag(i: number) {
-    setFlagged((prev) => {
-      const next = new Set(prev);
-      next.has(i) ? next.delete(i) : next.add(i);
-      return next;
-    });
+    const q = questions[i];
+    if (!q) return;
+    const next = new Set(flagged);
+    const nowFlagged = !next.has(q.id);
+    nowFlagged ? next.add(q.id) : next.delete(q.id);
+    setFlagged(next);
+    persist(q.id, { flagged: nowFlagged });
   }
 
-  function selectAnswer(optIdx: number) {
-    const next = [...answers];
-    next[current] = optIdx;
-    setAnswers(next);
+  /* ── Submit ───────────────────────────────────────────────────── */
+  /* Guards against the auto-submit effect and the button racing each other. */
+  const submitGuard = useRef(false);
+
+  const submitExam = useCallback(async () => {
+    if (submitGuard.current) return;
+    submitGuard.current = true;
+    setSubmitting(true); setError('');
+
+    if (!attemptId) {
+      submitGuard.current = false;
+      setSubmitting(false);
+      return;
+    }
+
+    try {
+      /* POST /api/attempts/:id/submit */
+      const res = await apiSubmitAttempt(attemptId);
+      setResults(res);
+      setPhase('results');
+    } catch (err: unknown) {
+      setError((err as { message?: string })?.message ?? 'Could not submit the exam.');
+      submitGuard.current = false;
+    } finally {
+      setSubmitting(false);
+    }
+  }, [attemptId]);
+
+  /* The server expires an overdue attempt on its own; submitting the moment the
+     clock hits zero just makes the transition immediate for the candidate. */
+  useEffect(() => {
+    if (phase === 'exam' && deadline !== null && timeLeft === 0) void submitExam();
+  }, [phase, deadline, timeLeft, submitExam]);
+
+  /* ── Review ───────────────────────────────────────────────────── */
+  /* GET /api/attempts/:id/review — only served once the attempt is terminal, so
+     the answer key never reaches the browser mid-exam. */
+  async function openReview() {
+    setReviewIdx(0);
+    setPhase('review');
+    if (!attemptId || reviewItems) return;
+    try {
+      setReviewItems(await apiGetAttemptReview(attemptId));
+    } catch (err: unknown) {
+      setError((err as { message?: string })?.message ?? 'Could not load the answer review.');
+    }
   }
+
+  function restart() {
+    submitGuard.current = false;
+    setAttemptId(null);
+    setAnswers({}); setFlagged(new Set()); setCurrent(0);
+    setResults(null); setReviewItems(null);
+    setDeadline(null);
+    setError('');
+    setPhase('start');
+  }
+
+  /* ── Derived ──────────────────────────────────────────────────── */
+  /* Every figure below comes from the server's grading response — the browser
+     never sees an answer key, so it cannot compute a score itself. */
+  const answered = questions.filter((q) => answers[q.id] != null).length;
+
+  const score  = results?.correctCount ?? 0;
+  const totalQ = results?.totalQuestions ?? questions.length;
+  const pct    = results ? Math.round(results.percentage) : 0;
+  const passed = results?.passed ?? false;
+
+  const title = product ? product.certName : id.toUpperCase();
 
   /* ── Start screen ─────────────────────────────────────────────── */
   if (phase === 'start') {
+    const qCount = product?.questionsCount ?? 0;
+    const mins   = product?.perExamDurationMinutes ?? 0;
+
     return (
       <div className="min-h-screen flex flex-col items-center justify-center px-4 pt-20"
         style={{ backgroundColor: bg, fontFamily: 'var(--ace-font)' }}>
@@ -263,18 +339,32 @@ export default function ExamInterfacePage() {
           <div className="h-32 flex items-center justify-center relative overflow-hidden"
             style={{ background: 'linear-gradient(135deg,#050D1A,#0A1628)' }}>
             <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'radial-gradient(circle at 2px 2px, white 1px, transparent 0)', backgroundSize: '18px 18px' }} />
-            <div className="text-center relative z-10">
+            <div className="text-center relative z-10 px-6">
               <p className="text-xs font-bold uppercase tracking-widest mb-1" style={{ color: 'var(--ace-brand)' }}>Practice Exam</p>
-              <h1 className="text-2xl font-black text-white uppercase">{id.toUpperCase()}</h1>
+              <h1 className="text-2xl font-black text-white uppercase">{title}</h1>
+              {product?.certCode && <p className="text-white/50 text-xs mt-1">{product.certCode}</p>}
             </div>
           </div>
 
           <div className="p-5 sm:p-8">
+            {catalogSlow && catalogLoading && (
+              <div className="flex items-center gap-2 mb-5 px-4 py-3 rounded-xl text-xs"
+                style={{ background: 'var(--ace-brand-light)', color: 'var(--ace-brand)' }}>
+                <Wifi className="h-4 w-4 animate-pulse shrink-0" /> Waking the exam server up…
+              </div>
+            )}
+            {error && (
+              <div className="flex items-start gap-2 mb-5 px-4 py-3 rounded-xl text-xs"
+                style={{ background: 'var(--muted)', color: 'var(--destructive)' }}>
+                <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" /> {error}
+              </div>
+            )}
+
             <div className="grid grid-cols-3 gap-2 sm:gap-4 mb-8">
               {[
-                { icon: BookOpen, value: `${questions.length}`, label: 'Questions' },
-                { icon: Clock, value: '90m', label: 'Duration' },
-                { icon: BarChart2, value: '70%', label: 'Pass Mark' },
+                { icon: BookOpen, value: qCount ? `${qCount}` : '—', label: 'Questions' },
+                { icon: Clock, value: mins ? `${mins}m` : '—', label: 'Duration' },
+                { icon: BarChart2, value: `${passMark}%`, label: 'Pass Mark' },
               ].map(({ icon: Icon, value, label }) => (
                 <div key={label} className="text-center rounded-2xl py-4"
                   style={{ backgroundColor: 'var(--muted)' }}>
@@ -293,7 +383,7 @@ export default function ExamInterfacePage() {
                   'You can flag questions and return to them later',
                   'The timer starts as soon as you click Start Exam',
                   'All questions are single best answer unless stated',
-                  'You can review your answers before submitting',
+                  'Your answers are saved as you go — the timer is enforced server-side',
                 ].map((tip) => (
                   <li key={tip} className="flex items-start gap-2 text-xs" style={{ color: textMuted }}>
                     <span className="w-1.5 h-1.5 rounded-full mt-1 flex-shrink-0" style={{ backgroundColor: 'var(--ace-brand)' }} />
@@ -303,10 +393,14 @@ export default function ExamInterfacePage() {
               </ul>
             </div>
 
-            <button onClick={startExam}
-              className="w-full py-4 rounded-2xl text-base font-bold text-white transition-all active:scale-[0.97]"
+            <button onClick={startExam} disabled={starting || catalogLoading || !examFormId}
+              className="w-full py-4 rounded-2xl text-base font-bold text-white transition-all active:scale-[0.97] disabled:opacity-60 flex items-center justify-center gap-2"
               style={{ backgroundColor: 'var(--ace-brand)', boxShadow: '0 4px 20px rgba(0,162,182,0.35)' }}>
-              Start Exam →
+              {starting
+                ? <><Loader2 className="h-4 w-4 animate-spin" /> Starting…</>
+                : catalogLoading ? 'Loading exam…'
+                : !examFormId ? 'Not yet available'
+                : 'Start Exam →'}
             </button>
             <Link to="/practice-exams"
               className="block text-center mt-3 text-sm py-3"
@@ -321,12 +415,10 @@ export default function ExamInterfacePage() {
 
   /* ── Results screen ───────────────────────────────────────────── */
   if (phase === 'results') {
-    const domainScores: Record<string, { correct: number; total: number }> = {};
-    questions.forEach((q, i) => {
-      if (!domainScores[q.domain]) domainScores[q.domain] = { correct: 0, total: 0 };
-      domainScores[q.domain].total++;
-      if (answers[i] === q.correct) domainScores[q.domain].correct++;
-    });
+    /* The per-topic breakdown is computed server-side during grading. */
+    const breakdown = (results?.domainBreakdown ?? []).map((d) => ({
+      domain: d.topic, correct: d.correct, total: d.total,
+    }));
 
     return (
       <div className="min-h-screen pt-20 sm:pt-24 pb-20 px-4" style={{ backgroundColor: bg, fontFamily: 'var(--ace-font)' }}>
@@ -347,12 +439,19 @@ export default function ExamInterfacePage() {
               </div>
 
               <div className="p-6 sm:p-8">
+                {results?.status === 'expired' && (
+                  <p className="text-xs mb-5 px-4 py-2.5 rounded-xl flex items-center gap-2"
+                    style={{ background: 'var(--muted)', color: 'var(--destructive)' }}>
+                    <AlertCircle className="h-4 w-4 shrink-0" /> Time expired — the attempt was graded automatically.
+                  </p>
+                )}
+
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
                   {[
-                    { label: 'Score', value: `${score}/${questions.length}`, color: 'var(--ace-brand)' },
+                    { label: 'Score', value: `${score}/${totalQ}`, color: 'var(--ace-brand)' },
                     { label: 'Correct', value: score, color: '#059669' },
-                    { label: 'Incorrect', value: questions.length - score, color: '#dc2626' },
-                    { label: 'Pass Mark', value: '70%', color: textMuted },
+                    { label: 'Incorrect', value: totalQ - score, color: '#dc2626' },
+                    { label: 'Pass Mark', value: `${passMark}%`, color: textMuted },
                   ].map(({ label, value, color }) => (
                     <div key={label} className="text-center rounded-2xl py-4"
                       style={{ backgroundColor: 'var(--muted)' }}>
@@ -365,19 +464,19 @@ export default function ExamInterfacePage() {
                 {/* Domain breakdown */}
                 <h3 className="font-black text-base mb-4" style={{ color: textPrimary }}>Performance by Domain</h3>
                 <div className="flex flex-col gap-3 mb-8">
-                  {Object.entries(domainScores).map(([domain, { correct, total }]) => {
-                    const dpct = Math.round((correct / total) * 100);
+                  {breakdown.map(({ domain, correct, total }) => {
+                    const dpct = total > 0 ? Math.round((correct / total) * 100) : 0;
                     return (
                       <div key={domain}>
                         <div className="flex justify-between text-xs mb-1.5">
                           <span style={{ color: textMuted }}>{domain}</span>
-                          <span style={{ color: dpct >= 70 ? '#059669' : '#dc2626' }}>{dpct}%</span>
+                          <span style={{ color: dpct >= passMark ? '#059669' : '#dc2626' }}>{dpct}%</span>
                         </div>
                         <div className="h-2 rounded-full overflow-hidden" style={{ backgroundColor: 'var(--border)' }}>
                           <motion.div className="h-full rounded-full"
                             initial={{ width: 0 }} animate={{ width: `${dpct}%` }}
                             transition={{ duration: 0.6, ease: 'easeOut' }}
-                            style={{ backgroundColor: dpct >= 70 ? '#059669' : '#dc2626' }} />
+                            style={{ backgroundColor: dpct >= passMark ? '#059669' : '#dc2626' }} />
                         </div>
                       </div>
                     );
@@ -385,7 +484,7 @@ export default function ExamInterfacePage() {
                 </div>
 
                 <div className="flex flex-col sm:flex-row gap-3">
-                  <button onClick={() => { setPhase('review'); setReviewIdx(0); }}
+                  <button onClick={openReview}
                     className="flex-1 py-3.5 rounded-2xl text-sm font-bold transition-all active:scale-[0.97]"
                     style={{ backgroundColor: 'var(--muted)', color: textPrimary }}>
                     <BookOpen className="h-4 w-4 inline mr-2" /> Review Answers
@@ -406,9 +505,43 @@ export default function ExamInterfacePage() {
 
   /* ── Review screen ────────────────────────────────────────────── */
   if (phase === 'review') {
-    const q = questions[reviewIdx];
-    const userAns = answers[reviewIdx];
-    const isCorrect = userAns === q.correct;
+    /* GET /attempts/:id/review is the only source of the answer key — it is
+       served only once the attempt is terminal. */
+    const liveItem = reviewItems?.[reviewIdx];
+
+    const item = liveItem
+      ? {
+          domain: liveItem.topic ?? 'General',
+          text: liveItem.text,
+          explanation: liveItem.explanation ?? '',
+          options: liveItem.options,
+          selectedOptionId: liveItem.selectedOptionId,
+          correctOptionId: liveItem.correctOptionId,
+          isCorrect: liveItem.isCorrect,
+        }
+      : null;
+
+    const reviewCount = reviewItems?.length ?? 0;
+
+    if (attemptId && !reviewItems) {
+      return (
+        <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: bg, fontFamily: 'var(--ace-font)' }}>
+          <div className="flex items-center gap-3 text-sm" style={{ color: textMuted }}>
+            <Loader2 className="h-5 w-5 animate-spin" style={{ color: 'var(--ace-brand)' }} /> Loading your answer review…
+          </div>
+        </div>
+      );
+    }
+
+    if (!item) {
+      return (
+        <div className="min-h-screen flex flex-col items-center justify-center gap-4 px-4" style={{ backgroundColor: bg, fontFamily: 'var(--ace-font)' }}>
+          <AlertCircle className="h-8 w-8" style={{ color: 'var(--destructive)' }} />
+          <p className="text-sm text-center" style={{ color: textMuted }}>{error || 'No review is available for this attempt.'}</p>
+          <button onClick={() => setPhase('results')} className="text-sm underline" style={{ color: 'var(--ace-brand)' }}>← Back to results</button>
+        </div>
+      );
+    }
 
     return (
       <div className="min-h-screen pt-20 sm:pt-24 pb-20 px-4" style={{ backgroundColor: bg, fontFamily: 'var(--ace-font)' }}>
@@ -419,7 +552,7 @@ export default function ExamInterfacePage() {
               ← Results
             </button>
             <span className="text-sm font-semibold" style={{ color: textMuted }}>
-              Question {reviewIdx + 1} of {questions.length}
+              Question {reviewIdx + 1} of {reviewCount}
             </span>
           </div>
 
@@ -427,31 +560,31 @@ export default function ExamInterfacePage() {
             <div className="p-6 sm:p-8">
               <div className="flex items-center gap-2 mb-4">
                 <span className="px-2.5 py-1 rounded-full text-xs font-semibold"
-                  style={{ backgroundColor: 'rgba(0,162,182,0.12)', color: 'var(--ace-brand)' }}>{q.domain}</span>
-                {isCorrect
+                  style={{ backgroundColor: 'rgba(0,162,182,0.12)', color: 'var(--ace-brand)' }}>{item.domain}</span>
+                {item.isCorrect
                   ? <CheckCircle2 className="h-4 w-4 ml-auto" style={{ color: '#059669' }} />
                   : <XCircle className="h-4 w-4 ml-auto" style={{ color: '#dc2626' }} />}
               </div>
 
-              <p className="font-semibold text-base mb-6 leading-relaxed" style={{ color: textPrimary }}>{q.text}</p>
+              <p className="font-semibold text-base mb-6 leading-relaxed" style={{ color: textPrimary }}>{item.text}</p>
 
               <div className="flex flex-col gap-3 mb-6">
-                {q.options.map((opt, i) => {
-                  const isUserChoice = userAns === i;
-                  const isAnswer = q.correct === i;
+                {item.options.map((opt, i) => {
+                  const isUserChoice = item.selectedOptionId === opt.id;
+                  const isAnswer = opt.isCorrect || item.correctOptionId === opt.id;
                   let bg2 = 'var(--muted)';
                   let bdr = border;
                   let col = textMuted;
                   if (isAnswer) { bg2 = 'rgba(5,150,105,0.12)'; bdr = '#059669'; col = '#059669'; }
                   if (isUserChoice && !isAnswer) { bg2 = 'rgba(220,38,38,0.10)'; bdr = '#dc2626'; col = '#dc2626'; }
                   return (
-                    <div key={i} className="flex items-start gap-3 px-5 py-4 rounded-2xl"
+                    <div key={opt.id} className="flex items-start gap-3 px-5 py-4 rounded-2xl"
                       style={{ backgroundColor: bg2, border: `1.5px solid ${bdr}` }}>
                       <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5"
                         style={{ backgroundColor: isAnswer ? '#059669' : isUserChoice ? '#dc2626' : 'var(--border)', color: (isAnswer || isUserChoice) ? '#fff' : textMuted }}>
                         {String.fromCharCode(65 + i)}
                       </div>
-                      <span className="text-sm leading-relaxed" style={{ color: col }}>{opt}</span>
+                      <span className="text-sm leading-relaxed" style={{ color: col }}>{opt.text}</span>
                       {isAnswer && <CheckCircle2 className="h-4 w-4 ml-auto mt-0.5 flex-shrink-0" style={{ color: '#059669' }} />}
                       {isUserChoice && !isAnswer && <XCircle className="h-4 w-4 ml-auto mt-0.5 flex-shrink-0" style={{ color: '#dc2626' }} />}
                     </div>
@@ -460,10 +593,12 @@ export default function ExamInterfacePage() {
               </div>
 
               {/* Explanation */}
-              <div className="rounded-2xl px-5 py-4" style={{ backgroundColor: 'var(--ace-brand-light)' }}>
-                <p className="text-xs font-bold mb-1.5" style={{ color: 'var(--ace-brand)' }}>Explanation</p>
-                <p className="text-sm leading-relaxed" style={{ color: textMuted }}>{q.explanation}</p>
-              </div>
+              {item.explanation && (
+                <div className="rounded-2xl px-5 py-4" style={{ backgroundColor: 'var(--ace-brand-light)' }}>
+                  <p className="text-xs font-bold mb-1.5" style={{ color: 'var(--ace-brand)' }}>Explanation</p>
+                  <p className="text-sm leading-relaxed" style={{ color: textMuted }}>{item.explanation}</p>
+                </div>
+              )}
             </div>
 
             <div className="flex border-t" style={{ borderColor: border }}>
@@ -473,9 +608,9 @@ export default function ExamInterfacePage() {
                 <ChevronLeft className="h-4 w-4" /> Previous
               </button>
               <div className="w-px" style={{ backgroundColor: border }} />
-              <button onClick={() => setReviewIdx(Math.min(questions.length - 1, reviewIdx + 1))} disabled={reviewIdx === questions.length - 1}
+              <button onClick={() => setReviewIdx(Math.min(reviewCount - 1, reviewIdx + 1))} disabled={reviewIdx === reviewCount - 1}
                 className="flex-1 py-4 text-sm font-semibold flex items-center justify-center gap-2 transition-opacity"
-                style={{ color: reviewIdx === questions.length - 1 ? textMuted : textPrimary, opacity: reviewIdx === questions.length - 1 ? 0.4 : 1 }}>
+                style={{ color: reviewIdx === reviewCount - 1 ? textMuted : textPrimary, opacity: reviewIdx === reviewCount - 1 ? 0.4 : 1 }}>
                 Next <ChevronRight className="h-4 w-4" />
               </button>
             </div>
@@ -487,7 +622,7 @@ export default function ExamInterfacePage() {
 
   /* ── Exam screen ──────────────────────────────────────────────── */
   const q = questions[current];
-  const progressPct = (answered / questions.length) * 100;
+  const progressPct = questions.length > 0 ? (answered / questions.length) * 100 : 0;
 
   return (
     <div className="min-h-screen pt-16 pb-32 px-4" style={{ backgroundColor: bg, fontFamily: 'var(--ace-font)' }}>
@@ -497,7 +632,7 @@ export default function ExamInterfacePage() {
         <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center gap-4">
           <div className="flex flex-col justify-center min-w-0">
             <div className="text-xs font-semibold uppercase tracking-widest" style={{ color: textMuted }}>Practice</div>
-            <div className="text-sm font-black uppercase tracking-wide truncate" style={{ color: textPrimary }}>{id.toUpperCase()}</div>
+            <div className="text-sm font-black uppercase tracking-wide truncate" style={{ color: textPrimary }}>{title}</div>
           </div>
           <div className="flex-1 flex flex-col gap-1.5 min-w-0">
             <div className="flex justify-between text-[10px]" style={{ color: textMuted }}>
@@ -509,11 +644,18 @@ export default function ExamInterfacePage() {
                 transition={{ duration: 0.3 }} style={{ backgroundColor: 'var(--ace-brand)' }} />
             </div>
           </div>
-          <CircularTimer timeLeft={timeLeft} totalTime={DURATION} />
+          <CircularTimer timeLeft={timeLeft} totalTime={totalTime} />
         </div>
       </div>
 
       <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+        {error && (
+          <div className="flex items-center gap-2 mb-4 px-4 py-3 rounded-xl text-xs"
+            style={{ background: 'var(--muted)', color: 'var(--destructive)' }}>
+            <AlertCircle className="h-4 w-4 shrink-0" /> {error}
+          </div>
+        )}
+
         {/* Grid: question nav + question */}
         <div className="grid lg:grid-cols-[220px_1fr] gap-6 items-start">
           {/* Question navigator */}
@@ -523,12 +665,12 @@ export default function ExamInterfacePage() {
               {answered}/{questions.length} answered
             </p>
             <div className="grid grid-cols-5 gap-1.5">
-              {questions.map((_, i) => {
-                const isAns = answers[i] !== null;
+              {questions.map((qq, i) => {
+                const isAns = answers[qq.id] != null;
                 const isCurr = i === current;
-                const isFlagged = flagged.has(i);
+                const isFlagged = flagged.has(qq.id);
                 return (
-                  <button key={i} onClick={() => setCurrent(i)}
+                  <button key={qq.id} onClick={() => setCurrent(i)}
                     className="h-8 w-full rounded-lg text-xs font-semibold transition-all"
                     style={{
                       backgroundColor: isCurr ? 'var(--ace-brand)' : isFlagged ? 'rgba(245,158,11,0.2)' : isAns ? 'rgba(5,150,105,0.15)' : 'var(--muted)',
@@ -562,24 +704,24 @@ export default function ExamInterfacePage() {
                     </span>
                     <span className="px-2.5 py-1 rounded-full text-xs font-semibold"
                       style={{ backgroundColor: 'var(--muted)', color: textMuted }}>
-                      {q.domain}
+                      {q?.domain}
                     </span>
                   </div>
                   <button onClick={() => toggleFlag(current)}
                     className="p-2 rounded-xl transition-colors"
-                    style={{ color: flagged.has(current) ? '#F59E0B' : textMuted, backgroundColor: flagged.has(current) ? 'rgba(245,158,11,0.12)' : 'transparent' }}
+                    style={{ color: q && flagged.has(q.id) ? '#F59E0B' : textMuted, backgroundColor: q && flagged.has(q.id) ? 'rgba(245,158,11,0.12)' : 'transparent' }}
                     title="Flag for review">
                     <Flag className="h-4 w-4" />
                   </button>
                 </div>
 
-                <p className="text-base font-semibold mb-6 leading-relaxed" style={{ color: textPrimary }}>{q.text}</p>
+                <p className="text-base font-semibold mb-6 leading-relaxed" style={{ color: textPrimary }}>{q?.text}</p>
 
                 <div className="flex flex-col gap-3">
-                  {q.options.map((opt, i) => {
-                    const selected = answers[current] === i;
+                  {q?.options.map((opt, i) => {
+                    const selected = answers[q.id] === opt.id;
                     return (
-                      <motion.button key={i} onClick={() => selectAnswer(i)}
+                      <motion.button key={opt.id} onClick={() => selectAnswer(opt.id)}
                         whileTap={{ scale: 0.99 }}
                         className="flex items-start gap-4 px-5 py-4 rounded-2xl text-left transition-all"
                         style={{
@@ -592,7 +734,7 @@ export default function ExamInterfacePage() {
                           style={{ borderColor: selected ? 'var(--ace-brand)' : border, backgroundColor: selected ? 'var(--ace-brand)' : 'transparent', color: selected ? '#fff' : textMuted }}>
                           {String.fromCharCode(65 + i)}
                         </div>
-                        <span className="text-sm leading-relaxed" style={{ color: selected ? ('var(--foreground)') : textMuted }}>{opt}</span>
+                        <span className="text-sm leading-relaxed" style={{ color: selected ? ('var(--foreground)') : textMuted }}>{opt.text}</span>
                       </motion.button>
                     );
                   })}
@@ -613,10 +755,10 @@ export default function ExamInterfacePage() {
                     Next <ChevronRight className="h-4 w-4" />
                   </button>
                 ) : (
-                  <button onClick={submitExam}
-                    className="flex-1 py-4 text-sm font-bold flex items-center justify-center gap-2"
+                  <button onClick={submitExam} disabled={submitting}
+                    className="flex-1 py-4 text-sm font-bold flex items-center justify-center gap-2 disabled:opacity-60"
                     style={{ color: 'var(--ace-brand)' }}>
-                    Submit Exam ✓
+                    {submitting ? <><Loader2 className="h-4 w-4 animate-spin" /> Submitting…</> : 'Submit Exam ✓'}
                   </button>
                 )}
               </div>
@@ -643,10 +785,10 @@ export default function ExamInterfacePage() {
             <ChevronRight className="h-4 w-4" />
           </button>
         ) : (
-          <button onClick={submitExam}
-            className="px-4 h-10 rounded-full text-sm font-bold text-white"
+          <button onClick={submitExam} disabled={submitting}
+            className="px-4 h-10 rounded-full text-sm font-bold text-white disabled:opacity-60"
             style={{ backgroundColor: 'var(--ace-brand)' }}>
-            Submit
+            {submitting ? '…' : 'Submit'}
           </button>
         )}
       </div>

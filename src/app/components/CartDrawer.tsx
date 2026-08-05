@@ -3,9 +3,13 @@ import { X, Trash2, ShoppingBag, ArrowRight, Plus, Minus } from 'lucide-react';
 import { useCart } from '../context/CartContext';
 import { ImageWithFallback } from './figma/ImageWithFallback';
 import { Link } from 'react-router';
+import { formatPrice } from '../lib/api';
 
 export function CartDrawer() {
   const { items, isOpen, closeCart, removeFromCart, updateQuantity, subtotal, itemCount } = useCart();
+  /* Every course in the cart should share one geo-resolved currency; fall back
+     to the first item's (or NGN) if that's ever not the case. */
+  const cartCurrency = items[0]?.course.currency ?? 'NGN';
 
   return (
     <>
@@ -117,7 +121,7 @@ export function CartDrawer() {
                         </button>
                       </div>
                       <span className="font-bold text-foreground text-sm">
-                        ₦{(course.price * quantity).toLocaleString()}
+                        {formatPrice(course.price * quantity, course.currency ?? cartCurrency)}
                       </span>
                     </div>
                   </div>
@@ -140,7 +144,7 @@ export function CartDrawer() {
             <div className="flex items-center justify-between">
               <span className="text-muted-foreground text-sm font-medium">Subtotal</span>
               <span className="text-foreground font-bold text-xl">
-                ₦{subtotal.toLocaleString()}
+                {formatPrice(subtotal, cartCurrency)}
               </span>
             </div>
             <p className="text-muted-foreground text-xs">

@@ -1,62 +1,67 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
+import { Link } from 'react-router';
 import { motion, AnimatePresence } from 'motion/react';
 import { ArrowRight, Clock, Users } from 'lucide-react';
+import { useApi, apiGetCourses, formatPrice } from '../lib/api';
+import type { ApiCourse } from '../lib/api';
 
-const IMG = 'https://wp.ituonline.com/wp-content/uploads/2023';
+interface Card {
+  id: string | number;
+  code: string;
+  title: string;
+  category: string;
+  duration: string;
+  students: string;
+  price: number;
+  currency: string;
+  color: string;
+  tagline: string;
+  desc: string;
+  image?: string;
+  /** Where "Enroll" goes — a real slug for live courses. */
+  href?: string;
+}
 
-const CARDS = [
-  {
-    id: 0, code: 'CISSP', title: 'Certified Information Systems Security Professional',
-    category: 'Cybersecurity', duration: '6 days', students: '12,400+',
-    price: 60000, color: '#005f6b',
-    tagline: 'Gold Standard in Security',
-    desc: 'The world\'s premier cybersecurity leadership certification. Covers all 8 security domains.',
-    image: `${IMG}/05/cissp.jpg`,
-  },
-  {
-    id: 1, code: 'Security+', title: 'CompTIA Security+',
-    category: 'Entry Level', duration: '5 days', students: '28,000+',
-    price: 60000, color: '#c0392b',
-    tagline: 'Launch Your Cyber Career',
-    desc: 'The most in-demand entry-level security cert. DoD-approved and vendor-neutral.',
-    image: `${IMG}/04/security-plus.jpg`,
-  },
-  {
-    id: 2, code: 'CCNA', title: 'Cisco Certified Network Associate',
-    category: 'Networking', duration: '5 days', students: '9,800+',
-    price: 60000, color: '#1ba0d8',
-    tagline: 'Master Cisco Networking',
-    desc: 'Prove your networking fundamentals with hands-on Cisco lab exercises.',
-    image: `${IMG}/04/200-301.jpg`,
-  },
-  {
-    id: 3, code: 'AWS SAA', title: 'AWS Solutions Architect Associate',
-    category: 'Cloud', duration: '4 days', students: '15,600+',
-    price: 60000, color: '#ff9900',
-    tagline: 'Design at Cloud Scale',
-    desc: 'Design fault-tolerant, scalable architectures on Amazon Web Services.',
-    image: `${IMG}/04/aws-saa-c02.jpg`,
-  },
-  {
-    id: 4, code: 'PMP', title: 'Project Management Professional',
-    category: 'Management', duration: '4 days', students: '21,000+',
-    price: 60000, color: '#2c5282',
-    tagline: 'Lead Any Project',
-    desc: 'The global standard for project managers, recognized in 200+ countries.',
-    image: `${IMG}/05/pmp-6th-1.jpg`,
-  },
-  {
-    id: 5, code: 'CISM', title: 'Certified Information Security Manager',
-    category: 'Management', duration: '4 days', students: '7,200+',
-    price: 60000, color: '#4a4a8a',
-    tagline: 'Advance Into Leadership',
-    desc: 'Validates IS management expertise for senior security professionals.',
-    image: `${IMG}/05/cism.jpg`,
-  },
-];
+
+/* A course carries no colour column, so each card gets a stable hue derived
+   from its title. Everything else on the card is real course data. */
+const PALETTE = ['#005f6b', '#c0392b', '#1ba0d8', '#ff9900', '#2c5282', '#4a4a8a'];
+const paletteFor = (s: string) => {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  return PALETTE[h % PALETTE.length];
+};
+
+function toCard(c: ApiCourse): Card {
+  const students = Number(c.students ?? 0);
+  return {
+    id:       c.id,
+    code:     c.shortTitle ?? c.title.split(' ')[0],
+    title:    c.title,
+    category: c.category ?? '',
+    duration: c.duration ?? '',
+    students: students > 0 ? `${students.toLocaleString()}+` : '',
+    price:    c.price ?? 0,
+    currency: c.currency,
+    color:    paletteFor(c.title),
+    tagline:  c.category ?? '',
+    desc:     c.description || '',
+    image:    c.image,
+    href:     c.slug ? `/courses/${c.slug}` : undefined,
+  };
+}
 
 export function AccordionCarousel() {
   const [active, setActive] = useState(0);
+
+  /* GET /api/courses */
+  const { data, loading } = useApi(() => apiGetCourses({ limit: 6 }), []);
+  const cards: Card[] = useMemo(() => (data ?? []).slice(0, 6).map(toCard), [data]);
+
+  const activeIdx = Math.min(active, cards.length - 1);
+
+  /* Nothing published yet — drop the section rather than show placeholders. */
+  if (!loading && cards.length === 0) return null;
 
   return (
     <section className="py-16 sm:py-20 px-4 sm:px-6 lg:px-8 bg-background" style={{ fontFamily: 'var(--ace-font)' }}>
@@ -69,20 +74,24 @@ export function AccordionCarousel() {
             </p>
             <SplitHeading text="Top Certifications" textColor='var(--foreground)' />
           </div>
-          <a
-            href="/courses"
+          <Link
+            to="/courses"
             className="flex items-center gap-2 text-sm font-semibold group"
             style={{ color: '#00A2B6' }}
           >
             View all courses
             <AnimatedArrow color="#00A2B6" />
-          </a>
+          </Link>
         </div>
 
         {/* Accordion row */}
         <div className="relative flex gap-3 overflow-x-auto pb-4 snap-x">
-          {CARDS.map((card, i) => {
-            const isActive = i === active;
+          {loading && cards.length === 0 && Array.from({ length: 6 }).map((_, i) => (
+            <div key={`sk-${i}`} className="flex-shrink-0 rounded-3xl animate-pulse"
+              style={{ width: i === 0 ? 384 : 80, height: 384, backgroundColor: 'var(--muted)' }} />
+          ))}
+          {cards.map((card, i) => {
+            const isActive = i === activeIdx;
             return (
               <motion.div
                 key={card.id}
@@ -181,29 +190,34 @@ export function AccordionCarousel() {
                         </p>
 
                         <div className="flex items-center gap-4 mb-5">
-                          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                            <Clock className="h-3.5 w-3.5" />
-                            {card.duration}
-                          </div>
-                          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                            <Users className="h-3.5 w-3.5" />
-                            {card.students}
-                          </div>
+                          {card.duration && (
+                            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                              <Clock className="h-3.5 w-3.5" />
+                              {card.duration}
+                            </div>
+                          )}
+                          {card.students && (
+                            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                              <Users className="h-3.5 w-3.5" />
+                              {card.students}
+                            </div>
+                          )}
                         </div>
 
                         <div className="flex items-center justify-between">
                           <div>
                             <p className="text-xs text-muted-foreground">From</p>
                             <p className="font-black text-foreground" style={{ fontSize: '1.25rem' }}>
-                              ₦{card.price.toLocaleString()}
+                              {formatPrice(card.price, card.currency)}
                             </p>
                           </div>
-                          <button
+                          <Link
+                            to={card.href ?? '/courses'}
                             className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-bold text-white"
                             style={{ backgroundColor: '#00A2B6' }}
                           >
                             Enroll <ArrowRight className="h-4 w-4" />
-                          </button>
+                          </Link>
                         </div>
                       </div>
                     </motion.div>
@@ -226,15 +240,15 @@ export function AccordionCarousel() {
 
         {/* Dots */}
         <div className="flex gap-2 justify-center mt-6">
-          {CARDS.map((_, i) => (
+          {cards.map((_, i) => (
             <button
               key={i}
               onClick={() => setActive(i)}
               className="rounded-full transition-all"
               style={{
-                width: i === active ? 24 : 6,
+                width: i === activeIdx ? 24 : 6,
                 height: 6,
-                backgroundColor: i === active ? '#00A2B6' : 'var(--border)',
+                backgroundColor: i === activeIdx ? '#00A2B6' : 'var(--border)',
               }}
             />
           ))}

@@ -1,22 +1,24 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router';
 import {
   LayoutDashboard, BookOpen, DollarSign, Layers, ClipboardList,
   ShoppingCart, CreditCard, Users, UserCog, FileText, LogOut, Menu, X,
   Plus, Edit2, Trash2, Upload, Eye, EyeOff, ChevronDown, ChevronUp,
-  Wifi, AlertCircle, CheckCircle2, Save, RefreshCw,
+  Wifi, AlertCircle, CheckCircle2, Save, RefreshCw, Award,
 } from 'lucide-react';
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import {
   adminGetStats, adminGetCourses, adminCreateCourse, adminUpdateCourse, adminDeleteCourse,
-  adminPublishCourse, adminUploadImage, adminGetPrices, adminUpdatePrice, adminAddPrice, adminDeletePrice,
+  adminPublishCourse, adminUploadImage, adminGetPrices, adminUpsertPrice, adminDeletePrice,
   adminGetExams, adminCreateExam, adminPublishExam, adminGetQuestions, adminCreateQuestion,
   adminImportQuestions, adminGetOrdersList, adminGetUsers, adminGetPayments, adminGetLeads, adminGetAuditLogs,
-  adminAddModule, adminAddLesson, clearAdminToken,
+  adminAddModule, adminAddLesson, adminAddExamForm, adminGetExamProduct, adminUpdateLeadStatus,
+  adminGetCourseOutline, clearAdminToken, formatPrice, minorToMajor,
 } from '../lib/api';
 import type {
   AdminStats, AdminCourse, ProductPrice, AdminExamProduct, AdminQuestion,
-  AdminOrder, AdminPayment, AdminLead, AdminAuditLog, AdminModule, AdminUser,
+  AdminOrder, AdminPayment, AdminLead, AdminAuditLog, AdminUser,
+  AdminModuleWithLessons, ItemType, ExamForm,
 } from '../lib/api';
 
 type Section = 'overview'|'courses'|'prices'|'modules'|'exams'|'orders'|'users'|'payments'|'leads'|'audit';
@@ -158,25 +160,52 @@ function useLive<T>(fetcher: () => Promise<T>, fallback: T) {
 ═══════════════════════════════════════════════════════════════════════ */
 
 function OverviewSection() {
-  const EMPTY: AdminStats = { totalRevenue: 0, totalOrders: 0, totalStudents: 0, totalCourses: 0, revenueByMonth: [], ordersByStatus: [] };
+  const EMPTY: AdminStats = {
+    users: { total: 0, students: 0 },
+    revenue: { byCurrency: {}, totalMinor: 0, currency: 'NGN' },
+    orders: { total: 0, byStatus: {} },
+    attempts: { total: 0, graded: 0, passed: 0, passRate: 0 },
+    topProducts: [],
+    revenueOverTime: [],
+  };
   const { data: stats, slow, err, reload } = useLive(adminGetStats, EMPTY);
+
+  /* Revenue is grouped by currency because the backend never sums across
+     them — a chart needs one series, so it plots the base currency
+     (`revenue.currency`) and lists any other currencies as separate figures
+     beneath it rather than mixing them into one misleading number. */
+  const baseCurrency = stats.revenue.currency;
+  const otherCurrencies = Object.entries(stats.revenue.byCurrency).filter(([c]) => c !== baseCurrency);
+
+  const ordersByStatusChart = Object.entries(stats.orders.byStatus).map(([status, count]) => ({ status, count }));
+  const revenueChart = stats.revenueOverTime.map(r => ({ month: r.month, revenue: minorToMajor(r.revenueMinor) }));
 
   return (
     <div>
       {slow && <ColdBanner msg="Connecting to live backend…" />}
       {err  && <ErrBanner msg={err} onRetry={reload} />}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <StatCard icon={<DollarSign size={22} />} label="Total Revenue"  value={`₦${(stats.totalRevenue / 1000).toFixed(0)}K`} color="#22c55e" />
-        <StatCard icon={<ShoppingCart size={22} />} label="Total Orders" value={stats.totalOrders.toString()} color="var(--ace-brand)" />
-        <StatCard icon={<Users size={22} />} label="Students"            value={stats.totalStudents.toLocaleString()} color="#a78bfa" />
-        <StatCard icon={<BookOpen size={22} />} label="Courses"          value={stats.totalCourses.toString()} color="#fb923c" />
+        <StatCard icon={<DollarSign size={22} />} label={`Revenue (${baseCurrency})`} value={formatPrice(minorToMajor(stats.revenue.totalMinor), baseCurrency)} color="#22c55e" />
+        <StatCard icon={<ShoppingCart size={22} />} label="Total Orders" value={stats.orders.total.toString()} color="var(--ace-brand)" />
+        <StatCard icon={<Users size={22} />} label="Students"            value={stats.users.students.toLocaleString()} color="#a78bfa" />
+        <StatCard icon={<Award size={22} />} label="Exam Pass Rate"      value={`${stats.attempts.passRate}%`} color="#fb923c" />
       </div>
-      {stats.revenueByMonth.length > 0 && (
+      {otherCurrencies.length > 0 && (
+        <div className="flex flex-wrap gap-3 mb-6">
+          {otherCurrencies.map(([currency, minor]) => (
+            <div key={currency} style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 10, padding: '8px 14px', fontFamily: 'var(--ace-font)' }}>
+              <span style={{ color: 'var(--muted-foreground)', fontSize: '0.75rem' }}>Revenue ({currency}) </span>
+              <span style={{ color: 'var(--foreground)', fontWeight: 700 }}>{formatPrice(minorToMajor(minor), currency)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {revenueChart.length > 0 && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 14, padding: 20 }}>
-            <h3 style={{ color: 'var(--foreground)', fontFamily: 'var(--ace-font)', fontWeight: 700, marginBottom: 16 }}>Monthly Revenue</h3>
+            <h3 style={{ color: 'var(--foreground)', fontFamily: 'var(--ace-font)', fontWeight: 700, marginBottom: 16 }}>Monthly Revenue ({baseCurrency})</h3>
             <ResponsiveContainer width="100%" height={200}>
-              <AreaChart data={stats.revenueByMonth}>
+              <AreaChart data={revenueChart}>
                 <defs>
                   <linearGradient id="rg" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%"  stopColor="var(--ace-brand)" stopOpacity={0.4} />
@@ -185,8 +214,8 @@ function OverviewSection() {
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                 <XAxis dataKey="month" tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={v => `₦${(v/1000).toFixed(0)}K`} />
-                <Tooltip contentStyle={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 8, fontFamily: 'var(--ace-font)' }} formatter={(v: number) => [`₦${v.toLocaleString()}`, 'Revenue']} />
+                <YAxis tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={v => formatPrice(v, baseCurrency)} />
+                <Tooltip contentStyle={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 8, fontFamily: 'var(--ace-font)' }} formatter={(v: number) => [formatPrice(v, baseCurrency), 'Revenue']} />
                 <Area type="monotone" dataKey="revenue" stroke="var(--ace-brand)" fill="url(#rg)" strokeWidth={2} />
               </AreaChart>
             </ResponsiveContainer>
@@ -194,7 +223,7 @@ function OverviewSection() {
           <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 14, padding: 20 }}>
             <h3 style={{ color: 'var(--foreground)', fontFamily: 'var(--ace-font)', fontWeight: 700, marginBottom: 16 }}>Orders by Status</h3>
             <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={stats.ordersByStatus}>
+              <BarChart data={ordersByStatusChart}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                 <XAxis dataKey="status" tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }} axisLine={false} tickLine={false} />
@@ -205,7 +234,7 @@ function OverviewSection() {
           </div>
         </div>
       )}
-      {stats.revenueByMonth.length === 0 && !slow && !err && (
+      {revenueChart.length === 0 && !slow && !err && (
         <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--muted-foreground)', fontFamily: 'var(--ace-font)' }}>
           No analytics data yet.
         </div>
@@ -279,7 +308,7 @@ function CoursesSection() {
             <tr key={c.id}>
               <Td><span style={{ color: 'var(--foreground)', fontWeight: 600 }}>{c.title}</span></Td>
               <Td>{c.category}</Td><Td>{c.level}</Td>
-              <Td>₦{(c.price ?? 0).toLocaleString()}</Td>
+              <Td>{formatPrice(c.price ?? 0, c.currency)}</Td>
               <Td><Badge status={c.published ? 'published' : 'draft'} /></Td>
               <Td>
                 <div style={{ display: 'flex', gap: 6 }}>
@@ -302,7 +331,9 @@ function CoursesSection() {
           <Field label="Description"><textarea style={{ ...inp, height: 80, resize: 'vertical' }} value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} /></Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Category"><input style={inp} value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))} /></Field>
-            <Field label="Price (₦)"><input style={inp} type="number" value={form.price} onChange={e => setForm(f => ({ ...f, price: e.target.value }))} /></Field>
+            {/* New courses are priced in the platform base currency (NGN); regional
+                prices are set afterward from the Prices section. */}
+            <Field label="Base Price (NGN)"><input style={inp} type="number" value={form.price} onChange={e => setForm(f => ({ ...f, price: e.target.value }))} /></Field>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Level">
@@ -330,40 +361,106 @@ function CoursesSection() {
   );
 }
 
+/* Regional prices hang off a specific catalog item, so GET /admin/product-prices
+   takes (itemType, itemId) — there is no "all prices" listing. The section
+   therefore starts with an item picker and loads that item's currency rows. */
+const CURRENCIES = ['NGN', 'USD', 'GBP', 'GHS', 'KES', 'ZAR'];
+
 function PricesSection() {
-  const { data: prices, setData: setPrices, slow, err, reload } = useLive(adminGetPrices, [] as ProductPrice[]);
+  const { data: courses } = useLive(adminGetCourses, [] as AdminCourse[]);
+  const { data: exams }   = useLive(adminGetExams,   [] as AdminExamProduct[]);
+
+  const [itemType, setItemType] = useState<ItemType>('course');
+  const [itemId, setItemId]     = useState('');
+  const [prices, setPrices]     = useState<ProductPrice[]>([]);
+  const [loading, setLoading]   = useState(false);
+  const [err, setErr]           = useState('');
+
   const [editing, setEditing] = useState<string | null>(null);
   const [editVal, setEditVal] = useState('');
   const [showAdd, setShowAdd] = useState(false);
-  const [addForm, setAddForm] = useState({ courseId: '', region: 'NG', currency: 'NGN', amount: '' });
+  const [addForm, setAddForm] = useState({ currency: 'USD', amount: '' });
+
+  const options = itemType === 'exam_product'
+    ? exams.map(e => ({ id: e.id, label: e.title }))
+    : itemType === 'course'
+      ? courses.map(c => ({ id: c.id, label: c.title }))
+      : [];
+
+  const load = useCallback(async (type: ItemType, id: string) => {
+    if (!id) { setPrices([]); return; }
+    setLoading(true); setErr('');
+    try { setPrices(await adminGetPrices(type, id)); }
+    catch (e: any) { setErr(e?.message ?? 'Could not load prices'); setPrices([]); }
+    finally { setLoading(false); }
+  }, []);
+
+  useEffect(() => { void load(itemType, itemId); }, [load, itemType, itemId]);
+
+  /* PUT is an upsert keyed on (itemType, itemId, currency) — editing an amount
+     and adding a currency are the same call. */
+  async function upsert(currency: string, amount: number) {
+    const saved = await adminUpsertPrice({ itemType, itemId, currency, amount });
+    setPrices(ps => {
+      const without = ps.filter(p => p.currency !== currency);
+      return [...without, saved];
+    });
+  }
 
   async function saveEdit(p: ProductPrice) {
-    const updated = await adminUpdatePrice(p.id, Number(editVal)).catch(() => ({ ...p, amount: Number(editVal) }));
-    setPrices(ps => ps.map(x => x.id === p.id ? updated : x)); setEditing(null);
+    await upsert(p.currency, Number(editVal)).catch(() => {});
+    setEditing(null);
   }
   async function doDelete(id: string) {
     await adminDeletePrice(id).catch(() => {}); setPrices(ps => ps.filter(p => p.id !== id));
   }
   async function addPrice() {
-    const created = await adminAddPrice({ ...addForm, amount: Number(addForm.amount) });
-    setPrices(ps => [...ps, created]); setShowAdd(false); setAddForm({ courseId: '', region: 'NG', currency: 'NGN', amount: '' });
+    await upsert(addForm.currency, Number(addForm.amount)).catch(() => {});
+    setShowAdd(false); setAddForm({ currency: 'USD', amount: '' });
   }
 
   return (
     <div>
-      {slow && <ColdBanner msg="Loading prices from backend…" />}
-      {err  && <ErrBanner msg={err} onRetry={reload} />}
-      <SectionHeader title={`Product Prices (${prices.length})`} action={<Btn onClick={() => setShowAdd(true)}><Plus size={14} /> Add Price</Btn>} />
+      {loading && <ColdBanner msg="Loading prices from backend…" />}
+      {err     && <ErrBanner msg={err} onRetry={() => load(itemType, itemId)} />}
+      <SectionHeader
+        title={`Regional Prices (${prices.length})`}
+        action={<Btn onClick={() => setShowAdd(true)} disabled={!itemId}><Plus size={14} /> Add Currency</Btn>}
+      />
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3" style={{ marginBottom: 16 }}>
+        <Field label="Item Type">
+          <select style={inp} value={itemType} onChange={e => { setItemType(e.target.value as ItemType); setItemId(''); }}>
+            <option value="course">Course</option>
+            <option value="exam_product">Exam Product</option>
+            <option value="exam_voucher">Exam Voucher</option>
+          </select>
+        </Field>
+        <Field label="Item">
+          {options.length > 0 ? (
+            <select style={inp} value={itemId} onChange={e => setItemId(e.target.value)}>
+              <option value="">Select an item…</option>
+              {options.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
+            </select>
+          ) : (
+            <input style={inp} placeholder="Item UUID" value={itemId} onChange={e => setItemId(e.target.value)} />
+          )}
+        </Field>
+      </div>
+
       <TblWrap>
-        <thead><tr><Th>Course ID</Th><Th>Region</Th><Th>Currency</Th><Th>Amount</Th><Th>Actions</Th></tr></thead>
+        <thead><tr><Th>Currency</Th><Th>Amount</Th><Th>Was</Th><Th>Actions</Th></tr></thead>
         <tbody>
-          {prices.length === 0 && !slow && (
-            <tr><td colSpan={5} style={{ textAlign: 'center', padding: '32px 0', color: 'var(--muted-foreground)', fontFamily: 'var(--ace-font)', fontSize: '0.85rem' }}>No prices configured yet.</td></tr>
+          {prices.length === 0 && !loading && (
+            <tr><td colSpan={4} style={{ textAlign: 'center', padding: '32px 0', color: 'var(--muted-foreground)', fontFamily: 'var(--ace-font)', fontSize: '0.85rem' }}>
+              {itemId ? 'No regional prices — this item falls back to its NGN base price.' : 'Pick an item to see its regional prices.'}
+            </td></tr>
           )}
           {prices.map(p => (
             <tr key={p.id}>
-              <Td>{p.courseId}</Td><Td>{p.region}</Td><Td>{p.currency}</Td>
+              <Td>{p.currency}</Td>
               <Td>{editing === p.id ? <input style={{ ...inp, width: 120, display: 'inline-block' }} value={editVal} onChange={e => setEditVal(e.target.value)} autoFocus /> : p.amount.toLocaleString()}</Td>
+              <Td>{p.originalAmount != null ? formatPrice(p.originalAmount, p.currency) : '—'}</Td>
               <Td>
                 <div style={{ display: 'flex', gap: 6 }}>
                   {editing === p.id
@@ -377,16 +474,16 @@ function PricesSection() {
         </tbody>
       </TblWrap>
       {showAdd && (
-        <Modal title="Add Price" onClose={() => setShowAdd(false)}>
-          <Field label="Course ID"><input style={inp} value={addForm.courseId} onChange={e => setAddForm(f => ({ ...f, courseId: e.target.value }))} /></Field>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Region"><input style={inp} value={addForm.region} onChange={e => setAddForm(f => ({ ...f, region: e.target.value }))} /></Field>
-            <Field label="Currency"><input style={inp} value={addForm.currency} onChange={e => setAddForm(f => ({ ...f, currency: e.target.value }))} /></Field>
-          </div>
+        <Modal title="Add / Update Currency Price" onClose={() => setShowAdd(false)}>
+          <Field label="Currency">
+            <select style={inp} value={addForm.currency} onChange={e => setAddForm(f => ({ ...f, currency: e.target.value }))}>
+              {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </Field>
           <Field label="Amount"><input style={inp} type="number" value={addForm.amount} onChange={e => setAddForm(f => ({ ...f, amount: e.target.value }))} /></Field>
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 8 }}>
             <Btn variant="ghost" onClick={() => setShowAdd(false)}>Cancel</Btn>
-            <Btn onClick={addPrice}>Add</Btn>
+            <Btn onClick={addPrice}>Save</Btn>
           </div>
         </Modal>
       )}
@@ -397,25 +494,46 @@ function PricesSection() {
 function ModulesSection() {
   const { data: courses, slow: cSlow } = useLive(adminGetCourses, [] as AdminCourse[]);
   const [selectedCourse, setSelectedCourse] = useState('');
-  const [modules, setModules] = useState<AdminModule[]>([]);
+  const [modules, setModules] = useState<AdminModuleWithLessons[]>([]);
   const [newMod, setNewMod]   = useState('');
   const [newLessons, setNewLessons] = useState<Record<string, string>>({});
   const [openMods, setOpenMods]     = useState<Set<string>>(new Set());
+  const [outlineErr, setOutlineErr] = useState('');
+
+  /* Load the saved outline when a course is picked — modules and lessons are
+     nested inside GET /admin/courses/:id. */
+  useEffect(() => {
+    if (!selectedCourse) { setModules([]); return; }
+    let cancelled = false;
+    setOutlineErr('');
+    adminGetCourseOutline(selectedCourse)
+      .then(ms => { if (!cancelled) setModules(ms); })
+      .catch((e: any) => { if (!cancelled) { setModules([]); setOutlineErr(e?.message ?? 'Could not load modules'); } });
+    return () => { cancelled = true; };
+  }, [selectedCourse]);
 
   async function addModule() {
     if (!selectedCourse || !newMod.trim()) return;
-    const mod = await adminAddModule(selectedCourse, { title: newMod, order: modules.length });
-    setModules(ms => [...ms, mod]); setNewMod('');
+    try {
+      const mod = await adminAddModule(selectedCourse, { title: newMod, order: modules.length });
+      setModules(ms => [...ms, { ...mod, lessons: [] }]); setNewMod('');
+    } catch (e: any) { setOutlineErr(e?.message ?? 'Could not add module'); }
   }
+
   async function addLesson(moduleId: string) {
     const title = newLessons[moduleId]; if (!title?.trim()) return;
-    await adminAddLesson(moduleId, { title, type: 'video', order: 0 });
-    setNewLessons(n => ({ ...n, [moduleId]: '' }));
+    const target = modules.find(m => m.id === moduleId);
+    try {
+      const lesson = await adminAddLesson(moduleId, { title, order: target?.lessons.length ?? 0 });
+      setModules(ms => ms.map(m => m.id === moduleId ? { ...m, lessons: [...m.lessons, lesson] } : m));
+      setNewLessons(n => ({ ...n, [moduleId]: '' }));
+    } catch (e: any) { setOutlineErr(e?.message ?? 'Could not add lesson'); }
   }
 
   return (
     <div>
       {cSlow && <ColdBanner msg="Loading courses…" />}
+      {outlineErr && <ErrBanner msg={outlineErr} />}
       <SectionHeader title="Modules & Lessons" />
       <Field label="Select Course">
         <select style={inp} value={selectedCourse} onChange={e => setSelectedCourse(e.target.value)}>
@@ -436,12 +554,22 @@ function ModulesSection() {
               <div key={mod.id} style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 10, marginBottom: 10 }}>
                 <button style={{ width: '100%', padding: '12px 16px', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
                   onClick={() => setOpenMods(s => { const n = new Set(s); n.has(mod.id) ? n.delete(mod.id) : n.add(mod.id); return n; })}>
-                  <span style={{ color: 'var(--foreground)', fontFamily: 'var(--ace-font)', fontWeight: 600 }}>{mod.title}</span>
+                  <span style={{ color: 'var(--foreground)', fontFamily: 'var(--ace-font)', fontWeight: 600 }}>
+                    {mod.title}
+                    <span style={{ color: 'var(--muted-foreground)', fontWeight: 400, marginLeft: 8, fontSize: '0.8rem' }}>
+                      {mod.lessons.length} {mod.lessons.length === 1 ? 'lesson' : 'lessons'}
+                    </span>
+                  </span>
                   {isOpen ? <ChevronUp size={15} style={{ color: 'var(--muted-foreground)' }} /> : <ChevronDown size={15} style={{ color: 'var(--muted-foreground)' }} />}
                 </button>
                 {isOpen && (
                   <div style={{ padding: '0 16px 14px' }}>
-                    <div style={{ display: 'flex', gap: 8 }}>
+                    {mod.lessons.map((l, li) => (
+                      <div key={l.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 0', borderTop: '1px solid var(--border)', color: 'var(--muted-foreground)', fontFamily: 'var(--ace-font)', fontSize: '0.83rem' }}>
+                        <span style={{ opacity: 0.6, minWidth: 18 }}>{li + 1}.</span> {l.title}
+                      </div>
+                    ))}
+                    <div style={{ display: 'flex', gap: 8, marginTop: mod.lessons.length ? 10 : 0 }}>
                       <input style={{ ...inp, flex: 1 }} value={newLessons[mod.id] ?? ''} onChange={e => setNewLessons(n => ({ ...n, [mod.id]: e.target.value }))} placeholder="New lesson title…" />
                       <Btn size="sm" onClick={() => addLesson(mod.id)}><Plus size={12} /> Add</Btn>
                     </div>
@@ -456,13 +584,20 @@ function ModulesSection() {
   );
 }
 
+/* An exam *product* is the sellable bundle; questions and attempts belong to
+   an exam *form* underneath it. Picking a product therefore loads its forms,
+   and the question bank is scoped to whichever form is selected. */
 function ExamsSection() {
   const { data: exams, setData: setExams, slow, err, reload } = useLive(adminGetExams, [] as AdminExamProduct[]);
-  const [selectedExam, setSelectedExam] = useState('');
+  const [selectedProduct, setSelectedProduct] = useState('');
+  const [forms, setForms]               = useState<ExamForm[]>([]);
+  const [selectedForm, setSelectedForm]  = useState('');
   const [questions, setQuestions]       = useState<AdminQuestion[]>([]);
   const [showCreate, setShowCreate]     = useState(false);
   const [showImport, setShowImport]     = useState(false);
+  const [showAddForm, setShowAddForm]   = useState(false);
   const [newExam, setNewExam]           = useState({ title: '', questions: '', duration: '', price: '' });
+  const [newForm, setNewForm]           = useState({ title: '', durationMinutes: '90', isFreeDemo: false });
   const [csvText, setCsvText]           = useState('');
   const [newQ, setNewQ]                 = useState({ text: '', options: ['','','',''], correctIndex: 0 });
 
@@ -474,26 +609,50 @@ function ExamsSection() {
     const updated = await adminPublishExam(ex.id, !ex.published).catch(() => ({ ...ex, published: !ex.published }));
     setExams(es => es.map(e => e.id === ex.id ? updated : e));
   }
-  async function loadQuestions(examId: string) {
-    setSelectedExam(examId); adminGetQuestions(examId).then(setQuestions).catch(() => setQuestions([]));
+
+  /* GET /admin/exam-products/:id → { …product, exams, topics } */
+  async function loadForms(productId: string) {
+    setSelectedProduct(productId); setSelectedForm(''); setQuestions([]);
+    const detail = await adminGetExamProduct(productId).catch(() => null);
+    const list = detail?.exams ?? [];
+    setForms(list);
+    if (list.length === 1) void selectForm(list[0].id);
   }
+
+  async function selectForm(formId: string) {
+    setSelectedForm(formId);
+    adminGetQuestions(formId).then(setQuestions).catch(() => setQuestions([]));
+  }
+
+  async function addForm() {
+    if (!selectedProduct || !newForm.title.trim()) return;
+    const f = await adminAddExamForm(selectedProduct, {
+      title: newForm.title,
+      durationMinutes: Number(newForm.durationMinutes) || 90,
+      isFreeDemo: newForm.isFreeDemo,
+      isPublished: true,
+    });
+    setForms(fs => [...fs, f]); setShowAddForm(false); setNewForm({ title: '', durationMinutes: '90', isFreeDemo: false });
+    void selectForm(f.id);
+  }
+
   async function addQuestion() {
-    if (!selectedExam || !newQ.text.trim()) return;
-    const q = await adminCreateQuestion({ examId: selectedExam, text: newQ.text, options: newQ.options, correctIndex: newQ.correctIndex });
+    if (!selectedForm || !newQ.text.trim()) return;
+    const q = await adminCreateQuestion({ examId: selectedForm, text: newQ.text, options: newQ.options, correctIndex: newQ.correctIndex });
     setQuestions(qs => [...qs, q]); setNewQ({ text: '', options: ['','','',''], correctIndex: 0 });
   }
   async function importCsv() {
-    if (!selectedExam) return;
-    const r = await adminImportQuestions(selectedExam, csvText).catch(() => ({ imported: 0 }));
+    if (!selectedForm) return;
+    const r = await adminImportQuestions(selectedForm, csvText).catch(() => ({ imported: 0 }));
     alert(`Imported ${r.imported} questions`); setShowImport(false); setCsvText('');
-    adminGetQuestions(selectedExam).then(setQuestions).catch(() => {});
+    adminGetQuestions(selectedForm).then(setQuestions).catch(() => {});
   }
 
   return (
     <div>
       {slow && <ColdBanner msg="Loading exams from backend…" />}
       {err  && <ErrBanner msg={err} onRetry={reload} />}
-      <SectionHeader title={`Exams (${exams.length})`} action={<Btn onClick={() => setShowCreate(true)}><Plus size={14} /> New Exam</Btn>} />
+      <SectionHeader title={`Exam Products (${exams.length})`} action={<Btn onClick={() => setShowCreate(true)}><Plus size={14} /> New Exam</Btn>} />
       <TblWrap>
         <thead><tr><Th>Title</Th><Th>Questions</Th><Th>Duration</Th><Th>Price</Th><Th>Status</Th><Th>Actions</Th></tr></thead>
         <tbody>
@@ -503,11 +662,11 @@ function ExamsSection() {
           {exams.map(ex => (
             <tr key={ex.id}>
               <Td><span style={{ color: 'var(--foreground)', fontWeight: 600 }}>{ex.title}</span></Td>
-              <Td>{ex.questions}</Td><Td>{ex.duration} min</Td><Td>₦{ex.price.toLocaleString()}</Td>
+              <Td>{ex.questions}</Td><Td>{ex.duration} min</Td><Td>{formatPrice(ex.price, ex.currency)}</Td>
               <Td><Badge status={ex.published ? 'published' : 'draft'} /></Td>
               <Td>
                 <div style={{ display: 'flex', gap: 6 }}>
-                  <Btn size="sm" variant="ghost" onClick={() => loadQuestions(ex.id)}>Questions</Btn>
+                  <Btn size="sm" variant="ghost" onClick={() => loadForms(ex.id)}>Exam Forms</Btn>
                   <Btn size="sm" variant={ex.published ? 'danger' : 'outline'} onClick={() => togglePublishExam(ex)}>
                     {ex.published ? <EyeOff size={12} /> : <Eye size={12} />}
                   </Btn>
@@ -518,7 +677,29 @@ function ExamsSection() {
         </tbody>
       </TblWrap>
 
-      {selectedExam && (
+      {selectedProduct && (
+        <div style={{ marginTop: 28 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+            <h3 style={{ color: 'var(--foreground)', fontFamily: 'var(--ace-font)', fontWeight: 700 }}>Exam Forms ({forms.length})</h3>
+            <Btn size="sm" variant="ghost" onClick={() => setShowAddForm(true)}><Plus size={12} /> New Form</Btn>
+          </div>
+          {forms.length === 0 ? (
+            <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 12, padding: 18, color: 'var(--muted-foreground)', fontFamily: 'var(--ace-font)', fontSize: '0.85rem' }}>
+              This product has no exam forms yet. Add one before importing questions — attempts are started against a form.
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {forms.map(f => (
+                <Btn key={f.id} size="sm" variant={selectedForm === f.id ? undefined : 'ghost'} onClick={() => selectForm(f.id)}>
+                  {f.title}{f.isFreeDemo ? ' · free demo' : ''}
+                </Btn>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {selectedForm && (
         <div style={{ marginTop: 28 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
             <h3 style={{ color: 'var(--foreground)', fontFamily: 'var(--ace-font)', fontWeight: 700 }}>Question Bank ({questions.length})</h3>
@@ -561,7 +742,9 @@ function ExamsSection() {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <Field label="Questions"><input style={inp} type="number" value={newExam.questions} onChange={e => setNewExam(f => ({ ...f, questions: e.target.value }))} /></Field>
             <Field label="Duration (min)"><input style={inp} type="number" value={newExam.duration} onChange={e => setNewExam(f => ({ ...f, duration: e.target.value }))} /></Field>
-            <Field label="Price (₦)"><input style={inp} type="number" value={newExam.price} onChange={e => setNewExam(f => ({ ...f, price: e.target.value }))} /></Field>
+            {/* New products are priced in the platform base currency (NGN); regional
+                prices are set afterward from the Prices section. */}
+            <Field label="Base Price (NGN)"><input style={inp} type="number" value={newExam.price} onChange={e => setNewExam(f => ({ ...f, price: e.target.value }))} /></Field>
           </div>
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 8 }}>
             <Btn variant="ghost" onClick={() => setShowCreate(false)}>Cancel</Btn>
@@ -569,12 +752,26 @@ function ExamsSection() {
           </div>
         </Modal>
       )}
+      {showAddForm && (
+        <Modal title="New Exam Form" onClose={() => setShowAddForm(false)}>
+          <Field label="Title"><input style={inp} value={newForm.title} onChange={e => setNewForm(f => ({ ...f, title: e.target.value }))} placeholder="Practice Test 1" /></Field>
+          <Field label="Duration (min)"><input style={inp} type="number" value={newForm.durationMinutes} onChange={e => setNewForm(f => ({ ...f, durationMinutes: e.target.value }))} /></Field>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--muted-foreground)', fontFamily: 'var(--ace-font)', fontSize: '0.82rem', marginBottom: 8 }}>
+            <input type="checkbox" checked={newForm.isFreeDemo} onChange={e => setNewForm(f => ({ ...f, isFreeDemo: e.target.checked }))} />
+            Free demo — this is the form "Try Free" starts on the public site
+          </label>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 8 }}>
+            <Btn variant="ghost" onClick={() => setShowAddForm(false)}>Cancel</Btn>
+            <Btn onClick={addForm}>Create</Btn>
+          </div>
+        </Modal>
+      )}
       {showImport && (
         <Modal title="Import Questions (CSV)" onClose={() => setShowImport(false)}>
           <p style={{ color: 'var(--muted-foreground)', fontSize: '0.8rem', fontFamily: 'var(--ace-font)', marginBottom: 12 }}>
-            Format: <code style={{ background: 'var(--muted)', padding: '1px 6px', borderRadius: 4 }}>question,opt1,opt2,opt3,opt4,correctIndex</code>
+            Header row required. Columns: <code style={{ background: 'var(--muted)', padding: '1px 6px', borderRadius: 4 }}>text, explanation, topic, difficulty, optionA, optionB, optionC, optionD, correct</code> — where <code>correct</code> is the letter (A–D) or 1-based index.
           </p>
-          <Field label="CSV Content"><textarea style={{ ...inp, height: 160, resize: 'vertical' }} value={csvText} onChange={e => setCsvText(e.target.value)} placeholder={"How many bits in a byte?,4,8,16,32,1"} /></Field>
+          <Field label="CSV Content"><textarea style={{ ...inp, height: 160, resize: 'vertical' }} value={csvText} onChange={e => setCsvText(e.target.value)} placeholder={"text,explanation,topic,difficulty,optionA,optionB,optionC,optionD,correct\nHow many bits in a byte?,A byte is 8 bits.,Fundamentals,Beginner,4,8,16,32,B"} /></Field>
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 8 }}>
             <Btn variant="ghost" onClick={() => setShowImport(false)}>Cancel</Btn>
             <Btn onClick={importCsv}><Upload size={13} /> Import</Btn>
@@ -627,8 +824,15 @@ function UsersSection() {
 function OrdersSection() {
   const { data, slow, err, reload } = useLive(() => adminGetOrdersList(), [] as AdminOrder[]);
 
-  const revenue = data.reduce((sum, o) => sum + (o.total ?? 0), 0);
-  const paid    = data.filter(o => ['completed', 'success', 'paid'].includes((o.status ?? '').toLowerCase())).length;
+  /* Orders can be in different currencies (geo-priced) — grouping by currency
+     rather than summing keeps a mixed batch from producing a meaningless
+     total. */
+  const revenueByCurrency = data.reduce<Record<string, number>>((acc, o) => {
+    const c = o.currency ?? 'NGN';
+    acc[c] = (acc[c] ?? 0) + (o.total ?? 0);
+    return acc;
+  }, {});
+  const paid = data.filter(o => ['completed', 'success', 'paid'].includes((o.status ?? '').toLowerCase())).length;
 
   return (
     <div>
@@ -638,7 +842,9 @@ function OrdersSection() {
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
         <StatCard icon={<ShoppingCart size={22} />} label="Total Orders" value={data.length.toLocaleString()}     color="var(--ace-brand)" />
         <StatCard icon={<CheckCircle2 size={22} />} label="Paid Orders"  value={paid.toLocaleString()}            color="#22c55e" />
-        <StatCard icon={<DollarSign size={22} />}   label="Gross Value"  value={`₦${revenue.toLocaleString()}`}   color="#fb923c" />
+        <StatCard icon={<DollarSign size={22} />}   label="Gross Value"
+          value={Object.entries(revenueByCurrency).map(([c, v]) => formatPrice(v, c)).join(' · ') || formatPrice(0, 'NGN')}
+          color="#fb923c" />
       </div>
 
       <SectionHeader title={`Orders (${data.length})`} action={<Btn variant="ghost" size="sm" onClick={reload}><RefreshCw size={12} /> Refresh</Btn>} />
@@ -649,7 +855,7 @@ function OrdersSection() {
           {data.map(o => (
             <tr key={o.id}>
               <Td><span style={{ fontFamily: 'monospace', fontSize: '0.78rem' }}>{o.id}</span></Td>
-              <Td>{o.userId}</Td><Td>₦{o.total.toLocaleString()}</Td>
+              <Td>{o.userId}</Td><Td>{formatPrice(o.total, o.currency)}</Td>
               <Td><Badge status={o.status} /></Td><Td>{o.createdAt}</Td>
             </tr>
           ))}
@@ -674,7 +880,7 @@ function PaymentsSection() {
             <tr key={p.id}>
               <Td><span style={{ fontFamily: 'monospace', fontSize: '0.78rem' }}>{p.id}</span></Td>
               <Td><span style={{ fontFamily: 'monospace', fontSize: '0.78rem' }}>{p.orderId}</span></Td>
-              <Td>₦{p.amount.toLocaleString()}</Td><Td>{p.method}</Td>
+              <Td>{formatPrice(p.amount, p.currency)}</Td><Td>{p.method}</Td>
               <Td><Badge status={p.status} /></Td><Td>{p.createdAt}</Td>
             </tr>
           ))}
@@ -684,21 +890,44 @@ function PaymentsSection() {
   );
 }
 
+/* Mirrors the backend's LeadStatus enum. */
+const LEAD_STATUSES = ['new', 'in_review', 'contacted', 'accepted', 'rejected', 'archived'];
+
 function LeadsSection() {
-  const { data, slow, err, reload } = useLive(() => adminGetLeads().then(r => r.leads), [] as AdminLead[]);
+  const { data, setData, slow, err, reload } = useLive(() => adminGetLeads().then(r => r.leads), [] as AdminLead[]);
+
+  /* PATCH /admin/leads/:id — optimistic; the row reverts on failure. */
+  async function setStatus(lead: AdminLead, status: string) {
+    const previous = lead.status;
+    setData(ls => ls.map(l => l.id === lead.id ? { ...l, status } : l));
+    await adminUpdateLeadStatus(lead.id, status).catch(() => {
+      setData(ls => ls.map(l => l.id === lead.id ? { ...l, status: previous } : l));
+    });
+  }
+
   return (
     <div>
       {slow && <ColdBanner msg="Loading leads from backend…" />}
       {err  && <ErrBanner msg={err} onRetry={reload} />}
       <SectionHeader title={`Leads (${data.length})`} />
       <TblWrap>
-        <thead><tr><Th>Name</Th><Th>Email</Th><Th>Phone</Th><Th>Source</Th><Th>Date</Th></tr></thead>
+        <thead><tr><Th>Name</Th><Th>Email</Th><Th>Phone</Th><Th>Type</Th><Th>Status</Th><Th>Date</Th></tr></thead>
         <tbody>
-          {data.length === 0 && !slow && <tr><td colSpan={5} style={{ textAlign: 'center', padding: '32px 0', color: 'var(--muted-foreground)', fontFamily: 'var(--ace-font)', fontSize: '0.85rem' }}>No leads yet.</td></tr>}
+          {data.length === 0 && !slow && <tr><td colSpan={6} style={{ textAlign: 'center', padding: '32px 0', color: 'var(--muted-foreground)', fontFamily: 'var(--ace-font)', fontSize: '0.85rem' }}>No leads yet.</td></tr>}
           {data.map(l => (
             <tr key={l.id}>
               <Td><span style={{ color: 'var(--foreground)', fontWeight: 600 }}>{l.name}</span></Td>
-              <Td>{l.email}</Td><Td>{l.phone ?? '—'}</Td><Td>{l.source ?? '—'}</Td><Td>{l.createdAt}</Td>
+              <Td>{l.email}</Td><Td>{l.phone ?? '—'}</Td><Td>{l.type ?? l.source ?? '—'}</Td>
+              <Td>
+                <select
+                  style={{ ...inp, width: 130, padding: '5px 8px', fontSize: '0.78rem' }}
+                  value={l.status ?? 'new'}
+                  onChange={e => setStatus(l, e.target.value)}
+                >
+                  {LEAD_STATUSES.map(s => <option key={s} value={s}>{s.replace('_', ' ')}</option>)}
+                </select>
+              </Td>
+              <Td>{l.createdAt}</Td>
             </tr>
           ))}
         </tbody>

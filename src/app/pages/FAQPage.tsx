@@ -114,7 +114,7 @@ const FAQ_CATEGORIES: FAQCategory[] = [
     items: [
       {
         q: 'Which certifications do you offer training for?',
-        a: 'We cover 100+ certifications across cybersecurity (CISSP, CISM, Security+, CEH), cloud (AWS, Azure, GCP), networking (CCNA, CCNP), project management (PMP, CAPM), IT service management (ITIL), and more.',
+        a: 'We cover certifications across cybersecurity (CISSP, CISM, Security+, CEH), cloud (AWS, Azure, GCP), networking (CCNA, CCNP), project management (PMP, CAPM), IT service management (ITIL), and more.',
       },
       {
         q: 'Where do I take the actual certification exam?',

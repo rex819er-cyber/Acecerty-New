@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, useLocation, Link, Navigate } from 'react-router';
 import { LayoutDashboard, Eye, EyeOff, ShieldAlert, Wifi, ArrowLeft } from 'lucide-react';
 import { apiLogin, storeAdminToken } from '../lib/api';
-import { isAuthorisedAdmin, hasAdminSession } from '../lib/adminAuth';
+import { hasAdminSession } from '../lib/adminAuth';
 
 /* ── token-driven styling: every value resolves from theme.css ─────────── */
 const inputStyle: React.CSSProperties = {
@@ -37,13 +37,8 @@ export default function AdminLoginPage() {
     e.preventDefault();
     setError('');
 
-    /* Step 1 — front-end gate for the authorised admin account */
-    if (!isAuthorisedAdmin(email, password)) {
-      setError('Unauthorized access: invalid admin email or password.');
-      return;
-    }
-
-    /* Step 2 — live credential exchange against the backend */
+    /* Live credential exchange against the backend — the backend's own
+       role check below is the only gate; there is no front-end allowlist. */
     setLoading(true); setSlow(false);
     const slowTimer = setTimeout(() => setSlow(true), 2500);
     try {

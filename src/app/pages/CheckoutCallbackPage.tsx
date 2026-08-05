@@ -5,7 +5,8 @@ import { toast } from 'sonner';
 import { AcecertyLogo } from '../components/AcecertyLogo';
 import { useCart } from '../context/CartContext';
 import {
-  NotAuthenticatedError, isPaymentSuccessful, verifyPayment,
+  NotAuthenticatedError, isPaymentSuccessful, isPaymentTerminalFailure,
+  pollOrderUntilSettled, readPendingOrder, clearPendingOrder,
 } from '../lib/payments';
 import type { VerifyResponse } from '../lib/payments';
 
@@ -15,9 +16,13 @@ type Phase = 'verifying' | 'success' | 'pending' | 'error';
  * /checkout/callback — where the gateway drops the buyer after payment.
  *
  * Paystack returns ?reference=…, Flutterwave ?transaction_id=… (plus tx_ref),
- * so all of those are accepted. The reference is verified server-side via
- * GET /api/orders/verify?reference=… with the Bearer token before anything is
- * treated as paid — the query string alone is not trustworthy.
+ * so all of those are accepted for display. Nothing in the query string is
+ * trusted: the order created before the redirect is read back from
+ * GET /api/orders/:id with the Bearer token, and only a server-side `paid`
+ * status — set by the provider's signed webhook — counts as settled.
+ *
+ * Because fulfilment is webhook-driven, a buyer can arrive here a beat before
+ * the webhook lands, so the order is polled briefly rather than checked once.
  */
 export default function CheckoutCallbackPage() {
   const [params] = useSearchParams();
@@ -31,11 +36,17 @@ export default function CheckoutCallbackPage() {
   /* Verification is a one-shot side effect; StrictMode double-invokes effects. */
   const started = useRef(false);
 
+  /* The order this return trip belongs to was parked in sessionStorage by
+     startCheckout(); the gateway's own reference is display-only. */
+  const pending = readPendingOrder();
+
   const reference =
     params.get('reference') ??
     params.get('transaction_id') ??
     params.get('tx_ref') ??
-    params.get('trxref');
+    params.get('trxref') ??
+    pending?.reference ??
+    null;
 
   useEffect(() => {
     if (started.current) return;
@@ -49,32 +60,37 @@ export default function CheckoutCallbackPage() {
       return;
     }
 
-    if (!reference) {
+    if (!pending?.orderId) {
       setPhase('error');
-      setMessage('No transaction reference was returned by the payment gateway.');
-      toast.error('Missing transaction reference');
+      setMessage('We could not match this return to an order. Open your dashboard to check whether the payment went through.');
+      toast.error('No pending order found in this browser session');
       return;
     }
 
     (async () => {
       try {
-        const res = await verifyPayment(reference);
+        const res = await pollOrderUntilSettled(pending.orderId);
         setResult(res);
 
         if (isPaymentSuccessful(res)) {
+          clearPendingOrder();
           clearCart();
           setPhase('success');
           setMessage('Payment confirmed — your enrolment is active.');
           toast.success('Payment successful');
           setTimeout(() => navigate('/dashboard', { replace: true }), 1800);
+        } else if (isPaymentTerminalFailure(res)) {
+          clearPendingOrder();
+          setPhase('error');
+          setMessage(`The gateway reported this order as ${res.status}. Your cart is still saved.`);
         } else {
           setPhase('pending');
-          setMessage(res.message ?? 'The gateway has not settled this payment yet. It may take a moment to clear.');
+          setMessage('The gateway has not settled this payment yet. It usually clears within a minute — use Check Again in a moment.');
         }
       } catch (err: unknown) {
         if (err instanceof NotAuthenticatedError) {
           toast.error('Please sign in to confirm your enrolment');
-          navigate('/login', { replace: true, state: { returnTo: `/checkout/callback?reference=${reference}` } });
+          navigate('/login', { replace: true, state: { returnTo: '/checkout/callback' } });
           return;
         }
         const e = err as { message?: string };
@@ -83,7 +99,7 @@ export default function CheckoutCallbackPage() {
         toast.error(e?.message ?? 'Payment verification failed');
       }
     })();
-  }, [reference, params, navigate, clearCart]);
+  }, [pending?.orderId, params, navigate, clearCart]);
 
   const isError = phase === 'error';
   const accent  = phase === 'success' ? 'var(--ace-brand)'
@@ -159,7 +175,7 @@ export default function CheckoutCallbackPage() {
             className="text-xs mt-3"
             style={{ color: 'var(--muted-foreground)', fontFamily: 'var(--ace-font)' }}
           >
-            Order {result.order.id} · ₦{Number(result.order.total ?? 0).toLocaleString()}
+            Order {result.order.id} · {result.order.currency} {Number(result.order.total ?? 0).toLocaleString()}
           </div>
         )}
 

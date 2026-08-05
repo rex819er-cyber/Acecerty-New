@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { Facebook, Instagram, Send, CheckCircle } from 'lucide-react';
+import { Facebook, Instagram, Send, CheckCircle, Loader2 } from 'lucide-react';
 import { AcecertyLogo } from './AcecertyLogo';
 import { useTheme } from '../context/ThemeContext';
+import { apiSubscribeNewsletter } from '../lib/api';
 
 const LINKS = {
   Individuals: [
@@ -65,10 +66,22 @@ export function Footer() {
   const { isDark } = useTheme();
   const [email, setEmail] = useState('');
   const [subscribed, setSubscribed] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState('');
 
-  const handleSubscribe = (e: React.FormEvent) => {
+  /* POST /api/leads/newsletter */
+  const handleSubscribe = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (email) setSubscribed(true);
+    if (!email) return;
+    setSending(true); setError('');
+    try {
+      await apiSubscribeNewsletter(email, { source: 'footer' });
+      setSubscribed(true);
+    } catch (err: unknown) {
+      setError((err as { message?: string })?.message ?? 'Subscription failed. Please try again.');
+    } finally {
+      setSending(false);
+    }
   };
 
   return (
@@ -101,28 +114,32 @@ export function Footer() {
                 <CheckCircle className="h-5 w-5" /> You're subscribed!
               </div>
             ) : (
-              <form
-                onSubmit={handleSubscribe}
-                className="flex gap-2 w-full md:w-auto"
-              >
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="Enter your email"
-                  required
-                  className="flex-1 md:w-64 px-4 py-3 rounded-xl bg-white/10 border border-white/15 text-white placeholder-white/40 text-sm focus:outline-none focus:ring-2 focus:border-transparent"
-                  style={{ '--tw-ring-color': '#00A2B6' } as React.CSSProperties}
-                />
-                <button
-                  type="submit"
-                  className="px-5 py-3 rounded-xl font-semibold text-white flex items-center gap-2 transition-all hover:opacity-90 active:scale-95"
-                  style={{ backgroundColor: '#00A2B6' }}
+              <div className="w-full md:w-auto">
+                <form
+                  onSubmit={handleSubscribe}
+                  className="flex gap-2 w-full md:w-auto"
                 >
-                  <Send className="h-4 w-4" />
-                  <span className="hidden sm:inline">Subscribe</span>
-                </button>
-              </form>
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="Enter your email"
+                    required
+                    className="flex-1 md:w-64 px-4 py-3 rounded-xl bg-white/10 border border-white/15 text-white placeholder-white/40 text-sm focus:outline-none focus:ring-2 focus:border-transparent"
+                    style={{ '--tw-ring-color': '#00A2B6' } as React.CSSProperties}
+                  />
+                  <button
+                    type="submit"
+                    disabled={sending}
+                    className="px-5 py-3 rounded-xl font-semibold text-white flex items-center gap-2 transition-all hover:opacity-90 active:scale-95 disabled:opacity-60"
+                    style={{ backgroundColor: '#00A2B6' }}
+                  >
+                    {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                    <span className="hidden sm:inline">Subscribe</span>
+                  </button>
+                </form>
+                {error && <p className="text-red-400 text-xs mt-2">{error}</p>}
+              </div>
             )}
           </div>
         </div>
@@ -138,7 +155,7 @@ export function Footer() {
             </div>
             <p className="text-white/45 text-sm leading-relaxed mb-6 max-w-xs">
               Accelerated IT certification training designed to unlock new skills and
-              fast-track your career. Trusted by 250,000+ professionals worldwide.
+              fast-track your career.
             </p>
             {/* Social links */}
             <div className="flex gap-3">

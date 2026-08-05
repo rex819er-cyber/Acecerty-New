@@ -6,13 +6,9 @@ import {
   Video, HelpCircle, FileText, Wifi, AlertCircle, Package,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { COURSES } from '../data/courses';
-import type { Course } from '../data/courses';
-import { getCsvCourse } from '../data/csvCourses';
-import type { CsvCourse } from '../data/csvCourses';
 import { useCart } from '../context/CartContext';
 import {
-  apiGetCourse, apiGetCourseProgress, apiAddToCart, getStoredToken,
+  apiGetCourse, apiGetCourseProgress, apiAddToCart, getStoredToken, formatPrice,
 } from '../lib/api';
 import type { ApiCourse } from '../lib/api';
 
@@ -21,311 +17,59 @@ interface LessonItem { id: string; title: string; duration?: string; type: 'vide
 interface ModuleItem { id: string; title: string; duration?: string; order: number; lessons: LessonItem[] }
 interface FullCourse {
   id: string; title: string; slug?: string; description: string; image?: string;
-  price: number; originalPrice?: number; duration: string; videos?: string; questions?: string;
+  price: number; originalPrice?: number; currency: string; duration: string; videos?: string; questions?: string;
   category: string; level: string; format?: string;
-  instructor: { name: string; title: string; bio: string; rating: number; students: number; reviews: number };
+  /* null when the course has no instructor assigned — the block is hidden. */
+  instructor: { name: string; title: string; bio: string; rating: number; students: number; reviews: number } | null;
   outcomes: string[]; requirements: string[];
   modules: ModuleItem[];
   rating: number; reviews: number; students: number;
   certificate: boolean; lastUpdated: string; highlights: string[];
   accentColor: string;
+  isLive?: boolean;
 }
 
-/* ── category curricula ─────────────────────────────────────────────────── */
-const CAT_CURRICULA: Record<string, { title: string; lessons: { title: string; type: 'video' | 'reading' | 'quiz'; duration: string }[] }[]> = {
-  comptia: [
-    { title: 'Core Concepts & Exam Objectives', lessons: [
-      { title: 'Introduction & Exam Overview', type: 'video', duration: '12:00' },
-      { title: 'Domain 1: Key Principles', type: 'video', duration: '18:30' },
-      { title: 'Hands-On Lab: Setup Environment', type: 'reading', duration: '20:00' },
-      { title: 'Domain 1 Practice Quiz', type: 'quiz', duration: '15:00' },
-    ]},
-    { title: 'Security Fundamentals', lessons: [
-      { title: 'Threat Landscape Overview', type: 'video', duration: '22:00' },
-      { title: 'Vulnerability Management', type: 'video', duration: '19:45' },
-      { title: 'Security Controls & Frameworks', type: 'video', duration: '17:30' },
-      { title: 'Module Quiz', type: 'quiz', duration: '15:00' },
-    ]},
-    { title: 'Network & Infrastructure', lessons: [
-      { title: 'Network Protocols Deep Dive', type: 'video', duration: '25:00' },
-      { title: 'Infrastructure Security', type: 'video', duration: '21:00' },
-      { title: 'Practice Lab: Network Config', type: 'reading', duration: '30:00' },
-    ]},
-    { title: 'Exam Preparation & Practice', lessons: [
-      { title: 'Exam Strategies & Tips', type: 'video', duration: '14:00' },
-      { title: 'Full Practice Exam (90 Questions)', type: 'quiz', duration: '90:00' },
-      { title: 'Review & Key Takeaways', type: 'video', duration: '20:00' },
-    ]},
-  ],
-  cisco: [
-    { title: 'Cisco Network Fundamentals', lessons: [
-      { title: 'Introduction to Cisco Technologies', type: 'video', duration: '15:00' },
-      { title: 'OSI Model & TCP/IP Stack', type: 'video', duration: '22:00' },
-      { title: 'Cisco IOS CLI Basics', type: 'video', duration: '28:00' },
-      { title: 'Module Assessment', type: 'quiz', duration: '15:00' },
-    ]},
-    { title: 'Routing & Switching', lessons: [
-      { title: 'VLANs and Trunking', type: 'video', duration: '24:00' },
-      { title: 'Routing Protocols: OSPF & EIGRP', type: 'video', duration: '30:00' },
-      { title: 'STP & Redundancy', type: 'video', duration: '20:00' },
-    ]},
-    { title: 'WAN & Security Concepts', lessons: [
-      { title: 'WAN Technologies', type: 'video', duration: '18:00' },
-      { title: 'ACLs & Firewall Basics', type: 'video', duration: '22:00' },
-      { title: 'VPN Fundamentals', type: 'video', duration: '19:00' },
-      { title: 'Module Quiz', type: 'quiz', duration: '15:00' },
-    ]},
-    { title: 'Exam Readiness', lessons: [
-      { title: 'Exam Blueprint Walkthrough', type: 'video', duration: '16:00' },
-      { title: 'Practice Exam', type: 'quiz', duration: '60:00' },
-    ]},
-  ],
-  aws: [
-    { title: 'Cloud Foundations', lessons: [
-      { title: 'AWS Global Infrastructure', type: 'video', duration: '14:00' },
-      { title: 'Core AWS Services Overview', type: 'video', duration: '20:00' },
-      { title: 'IAM & Security Basics', type: 'video', duration: '22:00' },
-    ]},
-    { title: 'Compute & Storage', lessons: [
-      { title: 'EC2 Deep Dive', type: 'video', duration: '28:00' },
-      { title: 'S3, EBS & EFS', type: 'video', duration: '24:00' },
-      { title: 'Lambda & Serverless', type: 'video', duration: '20:00' },
-      { title: 'Lab: Deploy a Web App', type: 'reading', duration: '45:00' },
-    ]},
-    { title: 'Networking & Databases', lessons: [
-      { title: 'VPC Architecture', type: 'video', duration: '26:00' },
-      { title: 'RDS & DynamoDB', type: 'video', duration: '22:00' },
-      { title: 'CloudFront & Route 53', type: 'video', duration: '18:00' },
-    ]},
-    { title: 'Exam Practice', lessons: [
-      { title: 'Key Exam Domains Review', type: 'video', duration: '20:00' },
-      { title: 'Practice Exam (65 Questions)', type: 'quiz', duration: '80:00' },
-    ]},
-  ],
-  security: [
-    { title: 'Security Fundamentals', lessons: [
-      { title: 'Information Security Principles', type: 'video', duration: '18:00' },
-      { title: 'CIA Triad in Practice', type: 'video', duration: '14:00' },
-      { title: 'Security Frameworks (NIST, ISO)', type: 'video', duration: '22:00' },
-    ]},
-    { title: 'Threats & Vulnerabilities', lessons: [
-      { title: 'Malware & Attack Vectors', type: 'video', duration: '25:00' },
-      { title: 'Social Engineering', type: 'video', duration: '18:00' },
-      { title: 'Vulnerability Scanning Lab', type: 'reading', duration: '35:00' },
-      { title: 'Module Quiz', type: 'quiz', duration: '20:00' },
-    ]},
-    { title: 'Defensive Technologies', lessons: [
-      { title: 'Firewalls & IDS/IPS', type: 'video', duration: '22:00' },
-      { title: 'SIEM & Log Analysis', type: 'video', duration: '24:00' },
-      { title: 'Incident Response Procedures', type: 'video', duration: '20:00' },
-    ]},
-    { title: 'Certification Prep', lessons: [
-      { title: 'Exam Strategy Session', type: 'video', duration: '15:00' },
-      { title: 'Full Mock Exam', type: 'quiz', duration: '90:00' },
-    ]},
-  ],
-  microsoft: [
-    { title: 'Microsoft Platform Fundamentals', lessons: [
-      { title: 'Windows Server Architecture', type: 'video', duration: '20:00' },
-      { title: 'Active Directory Overview', type: 'video', duration: '24:00' },
-      { title: 'Azure AD & Hybrid Identity', type: 'video', duration: '22:00' },
-    ]},
-    { title: 'Administration & Management', lessons: [
-      { title: 'Group Policy Management', type: 'video', duration: '26:00' },
-      { title: 'PowerShell Automation', type: 'video', duration: '30:00' },
-      { title: 'Hyper-V Virtualization', type: 'video', duration: '22:00' },
-      { title: 'Lab: Configure AD Environment', type: 'reading', duration: '40:00' },
-    ]},
-    { title: 'Security & Compliance', lessons: [
-      { title: 'Windows Defender & Security Center', type: 'video', duration: '18:00' },
-      { title: 'Compliance & Audit Policies', type: 'video', duration: '16:00' },
-      { title: 'Module Assessment', type: 'quiz', duration: '20:00' },
-    ]},
-    { title: 'Exam Preparation', lessons: [
-      { title: 'Exam Objectives Deep Dive', type: 'video', duration: '20:00' },
-      { title: 'Practice Exam', type: 'quiz', duration: '60:00' },
-    ]},
-  ],
-  pmi: [
-    { title: 'Project Management Foundations', lessons: [
-      { title: 'PMBOK Guide Overview', type: 'video', duration: '18:00' },
-      { title: 'Project Life Cycle & Phases', type: 'video', duration: '22:00' },
-      { title: 'Stakeholder Management', type: 'video', duration: '16:00' },
-    ]},
-    { title: 'Planning & Scope Management', lessons: [
-      { title: 'Project Charter & WBS', type: 'video', duration: '24:00' },
-      { title: 'Schedule & Cost Baseline', type: 'video', duration: '28:00' },
-      { title: 'Risk Management Planning', type: 'video', duration: '20:00' },
-      { title: 'Module Quiz', type: 'quiz', duration: '20:00' },
-    ]},
-    { title: 'Execution & Monitoring', lessons: [
-      { title: 'Earned Value Management', type: 'video', duration: '22:00' },
-      { title: 'Change Control & Issues', type: 'video', duration: '18:00' },
-      { title: 'Quality & Communications', type: 'video', duration: '16:00' },
-    ]},
-    { title: 'PMP Exam Prep', lessons: [
-      { title: 'Exam Application Guide', type: 'video', duration: '14:00' },
-      { title: 'Full Practice Exam (200 Questions)', type: 'quiz', duration: '120:00' },
-    ]},
-  ],
-  default: [
-    { title: 'Course Introduction', lessons: [
-      { title: 'Welcome & Course Overview', type: 'video', duration: '10:00' },
-      { title: 'Setting Up Your Environment', type: 'reading', duration: '15:00' },
-      { title: 'Core Concepts Introduction', type: 'video', duration: '20:00' },
-    ]},
-    { title: 'Core Skills', lessons: [
-      { title: 'Foundational Principles', type: 'video', duration: '22:00' },
-      { title: 'Practical Applications', type: 'video', duration: '25:00' },
-      { title: 'Hands-On Lab', type: 'reading', duration: '30:00' },
-      { title: 'Module Quiz', type: 'quiz', duration: '15:00' },
-    ]},
-    { title: 'Advanced Topics', lessons: [
-      { title: 'Advanced Techniques', type: 'video', duration: '28:00' },
-      { title: 'Real-World Case Studies', type: 'video', duration: '20:00' },
-      { title: 'Best Practices', type: 'video', duration: '18:00' },
-    ]},
-    { title: 'Final Assessment', lessons: [
-      { title: 'Course Review', type: 'video', duration: '15:00' },
-      { title: 'Final Exam', type: 'quiz', duration: '60:00' },
-    ]},
-  ],
-};
-
+/* Accent colour is presentation only — derived from the course's category
+   because the backend has no colour column. */
 const CAT_COLOR: Record<string, string> = {
   comptia: '#E31837', cisco: '#1BA0D7', aws: '#FF9900', security: '#00C7A3',
   microsoft: '#00A4EF', pmi: '#5C2D91', devops: '#0db7ed', default: 'var(--ace-brand)',
 };
 
 function accentFor(cat: string): string {
-  const k = cat.toLowerCase();
+  const k = (cat ?? '').toLowerCase();
   for (const [key, color] of Object.entries(CAT_COLOR)) {
-    if (k.includes(key)) return color;
+    if (key !== 'default' && k.includes(key)) return color;
   }
   return CAT_COLOR.default;
 }
 
-function buildCurriculum(category: string, _title: string): ModuleItem[] {
-  const k = category.toLowerCase();
-  let template = CAT_CURRICULA.default;
-  if (k.includes('comptia')) template = CAT_CURRICULA.comptia;
-  else if (k.includes('cisco') || k.includes('ccna') || k.includes('ccnp')) template = CAT_CURRICULA.cisco;
-  else if (k.includes('aws') || k.includes('amazon') || k.includes('cloud')) template = CAT_CURRICULA.aws;
-  else if (k.includes('security') || k.includes('hacking') || k.includes('cyber') || k.includes('chfi')) template = CAT_CURRICULA.security;
-  else if (k.includes('microsoft') || k.includes('azure') || k.includes('windows') || k.includes('sql server')) template = CAT_CURRICULA.microsoft;
-  else if (k.includes('project') || k.includes('pmp') || k.includes('agile') || k.includes('pmi')) template = CAT_CURRICULA.pmi;
-
-  return template.map((mod, mi) => ({
-    id: `mod-${mi}`,
-    title: mod.title,
-    order: mi,
-    duration: `${mod.lessons.reduce((s, l) => {
-      const [m] = l.duration.split(':').map(Number);
-      return s + m;
-    }, 0)} min`,
-    lessons: mod.lessons.map((l, li) => ({
-      id: `lesson-${mi}-${li}`,
-      title: l.title,
-      type: l.type,
-      duration: l.duration,
-      order: li,
+/* ── data transformer ───────────────────────────────────────────────────── */
+/* Straight projection of the API record. Nothing is invented: a field the
+   backend hasn't filled in stays empty and the UI omits that block. */
+function fromApiCourse(api: ApiCourse): FullCourse {
+  const cat = api.category ?? '';
+  const mods: ModuleItem[] = (api.modules ?? []).map((m, mi) => ({
+    id: m.id, title: m.title, duration: m.duration, order: m.order ?? mi,
+    lessons: (m.lessons ?? []).map((l, li) => ({
+      id: l.id, title: l.title, duration: l.duration,
+      type: (l.type as 'video' | 'reading' | 'quiz') ?? 'video',
+      order: l.order ?? li,
     })),
   }));
-}
-
-const DEFAULT_INSTRUCTOR = {
-  name: 'Acecerty Expert Team',
-  title: 'Certified IT Instructors & Industry Practitioners',
-  bio: 'Our instructors are active industry professionals with 10+ years of hands-on experience and hold multiple vendor certifications. They bring real-world scenarios into every lesson.',
-  rating: 4.8, students: 12450, reviews: 1840,
-};
-
-/* ── data transformers ──────────────────────────────────────────────────── */
-function fromApiCourse(api: ApiCourse): FullCourse {
-  const cat = api.category ?? 'IT';
-  const mods: ModuleItem[] = api.modules?.length
-    ? api.modules.map((m, mi) => ({
-        id: m.id, title: m.title, duration: m.duration, order: m.order ?? mi,
-        lessons: m.lessons.map((l, li) => ({
-          id: l.id, title: l.title, duration: l.duration,
-          type: (l.type as 'video' | 'reading' | 'quiz') ?? 'video',
-          order: l.order ?? li,
-        })),
-      }))
-    : buildCurriculum(cat, api.title);
   return {
-    id: api.id, title: api.title, slug: api.slug, description: api.description,
-    image: api.image, price: api.price ?? 60000, originalPrice: api.originalPrice,
-    duration: api.duration ?? '20+ Hours', videos: api.videos, questions: api.questions,
-    category: cat, level: api.level ?? 'Intermediate', format: api.format,
-    instructor: api.instructor ?? DEFAULT_INSTRUCTOR,
-    outcomes: api.outcomes?.length ? api.outcomes : [
-      'Pass your certification exam with confidence',
-      'Understand real-world applications of core concepts',
-      'Apply skills immediately in a professional environment',
-      'Access to practice exams and hands-on labs',
-    ],
-    requirements: api.requirements?.length ? api.requirements : [
-      'Basic computer literacy', 'Stable internet connection',
-      'Motivation to study and practise regularly',
-    ],
+    id: api.id, title: api.title, slug: api.slug, description: api.description, isLive: true,
+    image: api.image, price: api.price ?? 0, originalPrice: api.originalPrice, currency: api.currency,
+    duration: api.duration ?? '', videos: api.videos, questions: api.questions,
+    category: cat, level: api.level ?? '', format: api.format,
+    instructor: api.instructor ?? null,
+    outcomes: api.outcomes ?? [],
+    requirements: api.requirements ?? [],
     modules: mods,
-    rating: api.rating ?? 4.7, reviews: api.reviews ?? 320, students: api.students ?? 2100,
-    certificate: api.certificate ?? true, lastUpdated: api.lastUpdated ?? '2025',
-    highlights: api.highlights?.length ? api.highlights : [
-      'Self-paced on-demand video', 'Lifetime access', 'Certificate of completion',
-      'Practice exams included', '24/7 support',
-    ],
+    rating: api.rating ?? 0, reviews: api.reviews ?? 0, students: api.students ?? 0,
+    certificate: api.certificate ?? false, lastUpdated: api.lastUpdated ?? '',
+    highlights: api.highlights ?? [],
     accentColor: accentFor(cat),
-  };
-}
-
-function fromCsvCourse(csv: CsvCourse): FullCourse {
-  return {
-    id: csv.id, title: csv.title, description: csv.description, image: csv.image,
-    price: csv.price, duration: csv.duration, videos: csv.videos, questions: csv.questions,
-    category: csv.category, level: 'Intermediate',
-    instructor: DEFAULT_INSTRUCTOR,
-    outcomes: [
-      'Pass your certification exam with confidence',
-      'Apply skills immediately in a professional environment',
-      'Understand real-world use cases and best practices',
-      'Access to practice exams included',
-    ],
-    requirements: ['Basic computer literacy', 'Stable internet connection'],
-    modules: buildCurriculum(csv.category, csv.title),
-    rating: 4.7, reviews: 248, students: 1820,
-    certificate: true, lastUpdated: '2025',
-    highlights: [
-      `${csv.videos}`, `${csv.questions}`, 'Lifetime access',
-      'Certificate of completion', 'Mobile & desktop',
-    ],
-    accentColor: accentFor(csv.category),
-  };
-}
-
-function fromBootcampCourse(bc: Course): FullCourse {
-  return {
-    id: bc.id, title: bc.title, description: bc.description, image: bc.image,
-    price: bc.price, originalPrice: bc.originalPrice,
-    duration: bc.duration, category: bc.category, level: bc.level, format: bc.type,
-    instructor: DEFAULT_INSTRUCTOR,
-    outcomes: [
-      'Master the exam objectives and domains',
-      'Hands-on labs and real-world scenarios',
-      'Interview-ready skills from day one',
-      'Certificate upon completion',
-    ],
-    requirements: ['Basic computer literacy', 'Commitment to study schedule'],
-    modules: buildCurriculum(bc.category, bc.title),
-    rating: 4.8, reviews: 312, students: 2400,
-    certificate: true, lastUpdated: '2025',
-    highlights: [
-      bc.type === 'bootcamp' ? 'Live instructor-led sessions' : 'Self-paced on-demand',
-      `Duration: ${bc.duration}`, 'Lifetime access',
-      'Certificate of completion', '24/7 support',
-    ],
-    accentColor: accentFor(bc.category),
   };
 }
 
@@ -333,7 +77,7 @@ function fromBootcampCourse(bc: Course): FullCourse {
 
 function PageSkeleton() {
   return (
-    <div style={{ fontFamily: 'var(--ace-font)' }} className="min-h-screen">
+    <div style={{ fontFamily: 'var(--ace-font)' }} className="min-h-screen pt-20 sm:pt-24">
       <div style={{ background: 'var(--surface)', borderBottom: '1px solid var(--border)' }} className="py-10 px-4">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 flex gap-8">
           <div className="flex-1">
@@ -448,11 +192,11 @@ function EnrollCard({ course, onAddToCart, adding, inCart }: {
       <div style={{ padding: 22 }}>
         <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10, marginBottom: 4 }}>
           <span style={{ fontSize: '1.75rem', fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'var(--ace-font)' }}>
-            ₦{course.price.toLocaleString()}
+            {formatPrice(course.price, course.currency)}
           </span>
           {course.originalPrice && (
             <span style={{ fontSize: '1rem', color: 'var(--text-muted)', textDecoration: 'line-through', fontFamily: 'var(--ace-font)' }}>
-              ₦{course.originalPrice.toLocaleString()}
+              {formatPrice(course.originalPrice, course.currency)}
             </span>
           )}
         </div>
@@ -500,6 +244,9 @@ function EnrollCard({ course, onAddToCart, adding, inCart }: {
 }
 
 function InstructorCard({ instructor, accentColor }: { instructor: FullCourse['instructor']; accentColor: string }) {
+  /* No instructor assigned to this course — omit the block entirely rather
+     than showing a placeholder person. */
+  if (!instructor) return null;
   return (
     <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 14, padding: 22 }}>
       <h3 style={{ color: 'var(--text-primary)', fontFamily: 'var(--ace-font)', fontWeight: 700, marginBottom: 16 }}>Your Instructor</h3>
@@ -545,7 +292,12 @@ export default function CourseDetailPage() {
   const [error, setError] = useState<string | null>(null);
 
   const isAuth = !!getStoredToken();
-  const inCart = items.some(i => (i as any).id === id || (i as any).courseId === id);
+  /* The cart keys on the course's own id, which for a live course is its UUID —
+     not the slug in the URL — so match on both. */
+  const inCart = items.some(i => {
+    const cartId = (i as any).course?.id ?? (i as any).id ?? (i as any).courseId;
+    return cartId === id || (course && cartId === course.id);
+  });
 
   /* load course data — 3-source fallback */
   useEffect(() => {
@@ -557,12 +309,11 @@ export default function CourseDetailPage() {
       try {
         const api = await apiGetCourse(id);
         if (!cancelled) { setCourse(fromApiCourse(api)); }
-      } catch {
-        const csv = getCsvCourse(id);
-        if (csv && !cancelled) { setCourse(fromCsvCourse(csv)); return; }
-        const bc = COURSES.find(c => c.id === id);
-        if (bc && !cancelled) { setCourse(fromBootcampCourse(bc)); return; }
-        if (!cancelled) setError('Course not found.');
+      } catch (err: unknown) {
+        const e = err as { status?: number; message?: string };
+        if (!cancelled) {
+          setError(e?.status === 404 ? 'Course not found.' : e?.message ?? 'Could not load this course.');
+        }
       } finally {
         clearTimeout(slowTimer);
         if (!cancelled) { setSlowConn(false); setPageLoading(false); }
@@ -572,21 +323,26 @@ export default function CourseDetailPage() {
     return () => { cancelled = true; clearTimeout(slowTimer); };
   }, [id]);
 
-  /* load progress if authenticated */
+  /* Load progress if authenticated. Keyed on the resolved course's UUID rather
+     than the route param, which may be a slug or a bundled-content id — the
+     endpoint only accepts the former. */
   useEffect(() => {
-    if (!isAuth || !id) return;
-    apiGetCourseProgress(id)
+    if (!isAuth || !course?.isLive) return;
+    apiGetCourseProgress(course.id)
       .then(p => setCompletedLessons(p.completedLessons))
       .catch(() => {});
-  }, [id, isAuth]);
+  }, [course?.id, course?.isLive, isAuth]);
 
   const handleAddToCart = async () => {
     if (!course) return;
     setAdding(true);
     try {
-      apiAddToCart(course.id, course.price).catch(() => {});
+      /* Mirrors the local cart into the signed-in user's server-side cart so
+         checkout can build the order from it. Only live courses have a UUID the
+         backend recognises; bundled content stays local-only. */
+      if (course.isLive) apiAddToCart('course', course.id).catch(() => {});
       addToCart({
-        id: course.id, title: course.title, price: course.price,
+        id: course.id, title: course.title, price: course.price, currency: course.currency,
         category: course.category as any, description: course.description,
         duration: course.duration, level: course.level as any,
         image: course.image, type: 'online', shortTitle: course.title, delivery: 'Online',
@@ -610,9 +366,13 @@ export default function CourseDetailPage() {
   }
 
   const totalLessons = course.modules.reduce((s, m) => s + m.lessons.length, 0);
+  const lastUpdatedDate = course.lastUpdated ? new Date(course.lastUpdated) : null;
+  const formattedLastUpdated = lastUpdatedDate && !isNaN(lastUpdatedDate.getTime())
+    ? lastUpdatedDate.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+    : '';
 
   return (
-    <div style={{ fontFamily: 'var(--ace-font)', background: 'var(--bg)', minHeight: '100vh' }}>
+    <div className="pt-20 sm:pt-24" style={{ fontFamily: 'var(--ace-font)', background: 'var(--bg)', minHeight: '100vh' }}>
       {/* Hero header */}
       <div style={{ background: 'var(--surface)', borderBottom: '1px solid var(--border)', paddingTop: 32, paddingBottom: 32 }}>
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -668,9 +428,9 @@ export default function CourseDetailPage() {
                 ))}
               </div>
 
-              {course.lastUpdated && (
+              {formattedLastUpdated && (
                 <div style={{ color: 'var(--text-muted)', fontSize: '0.78rem', fontFamily: 'var(--ace-font)' }}>
-                  Last updated: {course.lastUpdated}
+                  Last updated: {formattedLastUpdated}
                 </div>
               )}
             </div>

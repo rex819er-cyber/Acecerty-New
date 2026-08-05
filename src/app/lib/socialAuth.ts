@@ -9,10 +9,10 @@
 ───────────────────────────────────────────────────────────────────────── */
 
 export const GOOGLE_CLIENT_ID =
-  (import.meta as any).env?.VITE_GOOGLE_CLIENT_ID ?? 'YOUR_GOOGLE_CLIENT_ID_HERE';
+  import.meta.env.VITE_GOOGLE_CLIENT_ID ?? 'YOUR_GOOGLE_CLIENT_ID_HERE';
 
 export const LINKEDIN_CLIENT_ID =
-  (import.meta as any).env?.VITE_LINKEDIN_CLIENT_ID ?? 'YOUR_LINKEDIN_CLIENT_ID_HERE';
+  import.meta.env.VITE_LINKEDIN_CLIENT_ID ?? 'YOUR_LINKEDIN_CLIENT_ID_HERE';
 
 export const isPlaceholder = (id: string) => id.startsWith('YOUR_');
 

@@ -6,19 +6,16 @@ const TABS = [
     id: 'learn', label: 'Learn', icon: BookOpen,
     heading: 'Learn faster with expert-led bootcamps',
     body: 'Master comprehensive IT certification content through accelerated bootcamps — modify your learning path with expert guidance, and gain hands-on experience to power your career advancement.',
-    stat: '500+', statLabel: 'Expert instructors',
   },
   {
     id: 'practice', label: 'Practice', icon: Target,
     heading: 'Practice until you\'re exam-day ready',
     body: 'Practice with thousands of exam questions and real-world scenarios to build confidence and identify knowledge gaps before test day.',
-    stat: '10,000+', statLabel: 'Practice questions',
   },
   {
     id: 'certify', label: 'Certify', icon: Award,
     heading: 'Certify on your first attempt — guaranteed',
     body: 'Certify on your first attempt with our exam guarantee — and continually advance your career with ongoing support and resources based on industry best practices.',
-    stat: '94%', statLabel: 'First-attempt pass rate',
   },
 ];
 
@@ -50,7 +47,7 @@ export function ProcessSection() {
             Go from learning today to leading tomorrow.
           </h2>
           <p className="max-w-xl mx-auto" style={{ fontSize: '1.05rem', color: 'var(--muted-foreground)' }}>
-            Our proven three-step process has helped 250,000+ professionals earn their certifications and advance their careers.
+            Learn, practise, and certify — a straightforward path from first lesson to passing your exam.
           </p>
         </div>
 
@@ -139,10 +136,8 @@ export function ProcessSection() {
               style={{ background: 'linear-gradient(135deg, #050505 0%, #111118 100%)' }}
             >
               <div className="text-center">
-                <div className="font-black text-white mb-2" style={{ fontSize: 'clamp(3rem, 6vw, 5rem)', lineHeight: 1 }}>
-                  {tab.stat}
-                </div>
-                <p className="text-white/60 font-medium" style={{ fontSize: '1rem' }}>{tab.statLabel}</p>
+                <tab.icon className="h-16 w-16 mx-auto mb-5" style={{ color: '#00A2B6' }} />
+                <p className="text-white font-bold" style={{ fontSize: '1.25rem' }}>{tab.label}</p>
                 <div className="mt-6 inline-flex items-center gap-2 px-4 py-2 rounded-full" style={{ backgroundColor: 'rgba(0,162,182,0.15)', border: '1px solid rgba(0,162,182,0.3)' }}>
                   <span className="h-2 w-2 rounded-full animate-pulse" style={{ backgroundColor: '#00A2B6' }} />
                   <span className="text-white/80 text-sm font-medium">Acecerty Certified</span>

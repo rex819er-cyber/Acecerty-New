@@ -6,11 +6,12 @@ import { AccordionCarousel } from '../components/AccordionCarousel';
 import { PinnedCardStack } from '../components/PinnedCardStack';
 import { ProcessSection } from '../components/ProcessSection';
 import { LeadForm } from '../components/LeadForm';
-import { TestimonialsSection } from '../components/TestimonialsSection';
 import { SpriteCrowd } from '../components/SpriteCrowd';
-import { BlogSection } from '../components/BlogSection';
 import { ScrollPathSection } from '../components/ScrollPathSection';
 
+/* TestimonialsSection and BlogSection are not rendered: their reviews, author
+   names and articles were invented, and there is no backend to source real
+   ones from. Restore them here once those endpoints exist. */
 const SECTIONS_TOP = [
   { Component: TrustLogos },
   { Component: AccordionCarousel },
@@ -19,7 +20,6 @@ const SECTIONS_TOP = [
 const SECTIONS_MID = [
   { Component: ProcessSection },
   { Component: LeadForm },
-  { Component: TestimonialsSection },
 ];
 
 function AnimatedSection({
@@ -78,8 +78,6 @@ export default function HomePage() {
 
       {/* System I: Sprite crowd engine — direct mount for GSAP ticker */}
       <SpriteCrowd />
-
-      <AnimatedSection Component={BlogSection} reducedMotion={shouldReduceMotion} />
     </div>
   );
 }

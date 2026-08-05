@@ -6,8 +6,7 @@ import {
 } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router';
 import { motion, AnimatePresence } from 'motion/react';
-import { CSV_COURSES } from '../data/csvCourses';
-import { useApi, apiGetCourses } from '../lib/api';
+import { useApi, apiGetCourses, formatPrice } from '../lib/api';
 import type { ApiCourse, ApiModule } from '../lib/api';
 import { ImageWithFallback } from '../components/figma/ImageWithFallback';
 
@@ -28,28 +27,40 @@ interface Training {
   level: Exclude<Level, 'All'>;
   duration: string;
   price: number;
+  currency: string;
   includes: string[];
   color: string;
   popular?: boolean;
 }
 
-const TRAININGS: Training[] = [
-  { id: 't1', title: 'CompTIA Security+ Bootcamp', cert: 'Security+', vendor: 'CompTIA', format: 'Bootcamp', level: 'Intermediate', duration: '5 Days', price: 60000, includes: ['Courseware', 'Exam Voucher', 'Free Retake', 'Lab Access'], color: '#c0392b', popular: true },
-  { id: 't2', title: 'CISSP Intensive Bootcamp', cert: 'CISSP', vendor: 'ISC2', format: 'Bootcamp', level: 'Advanced', duration: '6 Days', price: 60000, includes: ['Official Courseware', 'Exam Voucher', 'Practice Exams', 'Mentorship'], color: '#005f6b', popular: true },
-  { id: 't3', title: 'CCNA Live Online Training', cert: 'CCNA', vendor: 'Cisco', format: 'Live Online', level: 'Intermediate', duration: '5 Days', price: 60000, includes: ['Live Instructor', 'Lab Access', 'Recording Access', 'Study Guide'], color: '#1ba0d8' },
-  { id: 't4', title: 'AWS Solutions Architect Live', cert: 'SAA-C03', vendor: 'AWS', format: 'Live Online', level: 'Intermediate', duration: '4 Days', price: 60000, includes: ['Live Instructor', 'AWS Labs', 'Practice Exams', 'Recording'], color: '#ff9900' },
-  { id: 't5', title: 'CompTIA A+ Self-Paced', cert: 'A+', vendor: 'CompTIA', format: 'Self-Paced', level: 'Beginner', duration: '180 Days Access', price: 60000, includes: ['On-Demand Videos', 'Study Guide', 'Practice Questions', 'Exam Vouchers (x2)'], color: '#c0392b' },
-  { id: 't6', title: 'Azure Administrator Self-Paced', cert: 'AZ-104', vendor: 'Microsoft', format: 'Self-Paced', level: 'Intermediate', duration: '180 Days Access', price: 60000, includes: ['On-Demand Videos', 'Azure Labs', 'Practice Exams', 'Exam Voucher'], color: '#0078d4' },
-  { id: 't7', title: 'PMP Exam Prep Bootcamp', cert: 'PMP', vendor: 'PMI', format: 'Bootcamp', level: 'Advanced', duration: '4 Days', price: 60000, includes: ['35 PDUs', 'PMBOK® Guide', 'Practice Exams', 'Exam Prep Toolkit'], color: '#2c5282' },
-  { id: 't8', title: 'Network+ Live Online', cert: 'Network+', vendor: 'CompTIA', format: 'Live Online', level: 'Beginner', duration: '5 Days', price: 60000, includes: ['Live Instructor', 'Study Guide', 'Practice Exams', 'Recording Access'], color: '#c0392b' },
-  { id: 't9', title: 'CISM Certification Bootcamp', cert: 'CISM', vendor: 'ISACA', format: 'Bootcamp', level: 'Advanced', duration: '4 Days', price: 60000, includes: ['CISM QAE Manual', 'Practice Exams', 'Exam Voucher', 'CPE Credits'], color: '#4a4a8a' },
-  /* Corporate entries */
-  { id: 'tc1', title: 'Enterprise Security Team Training', cert: 'CompTIA Bundle', vendor: 'CompTIA', format: 'Corporate', level: 'Intermediate', duration: 'Custom (5–10 Days)', price: 60000, includes: ['Dedicated Instructor', 'Custom Curriculum', 'On-Site or Virtual', 'Team Progress Dashboard'], color: '#00A2B6', popular: true },
-  { id: 'tc2', title: 'Corporate Cloud Transformation', cert: 'AWS + Azure', vendor: 'Multi-Vendor', format: 'Corporate', level: 'Advanced', duration: 'Custom Programme', price: 60000, includes: ['Architecture Review', 'Hands-On Labs', 'Migration Strategy', 'Post-Training Support'], color: '#6366f1' },
-  { id: 'tc3', title: 'DoD 8570/8140 Compliance Package', cert: 'DoD Approved', vendor: 'Acecerty', format: 'Corporate', level: 'Advanced', duration: 'Flexible', price: 60000, includes: ['IAT/IAM Level Coverage', 'Govt Billing', 'GSA Pricing', 'Compliance Reporting'], color: '#1a5276' },
-];
+/* Trainings are courses: the backend's CourseType maps onto the format tabs.
+   Colour has no backend column, so it is derived from the title. */
+const TRAINING_PALETTE = ['#c0392b', '#005f6b', '#1ba0d8', '#ff9900', '#0078d4', '#2c5282', '#4a4a8a'];
+const colorFor = (s: string) => {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  return TRAINING_PALETTE[h % TRAINING_PALETTE.length];
+};
 
-const FORMATS: Format[] = ['All', 'Bootcamp', 'Live Online', 'Self-Paced', 'Corporate'];
+function toTraining(c: ApiCourse): Training {
+  const fmt: Exclude<Format, 'All'> = (c.format ?? '').toLowerCase() === 'bootcamp' ? 'Bootcamp' : 'Self-Paced';
+  return {
+    id: c.slug ?? c.id,
+    title: c.title,
+    cert: c.shortTitle ?? '',
+    vendor: c.category ?? '',
+    format: fmt,
+    level: (c.level as Exclude<Level, 'All'>) || 'Intermediate',
+    duration: c.duration ?? '',
+    price: c.price ?? 0,
+    currency: c.currency,
+    includes: c.highlights ?? [],
+    color: colorFor(c.title),
+    popular: c.isFeatured ?? false,
+  };
+}
+
+const FORMATS: Format[] = ['All', 'Bootcamp', 'Self-Paced'];
 const LEVELS: Level[]   = ['All', 'Beginner', 'Intermediate', 'Advanced'];
 
 const FORMAT_ICON: Record<string, React.ElementType> = {
@@ -150,10 +161,12 @@ function TrainingCard({ training }: { training: Training }) {
         </ul>
         <div className="mt-auto">
           <div className="flex items-baseline gap-2 mb-4">
-            <span style={{ fontSize: '1.2rem', fontWeight: 900, color: 'var(--ace-brand)', fontFamily: 'var(--ace-font)' }}>₦60,000</span>
+            <span style={{ fontSize: '1.2rem', fontWeight: 900, color: 'var(--ace-brand)', fontFamily: 'var(--ace-font)' }}>
+              {formatPrice(training.price, training.currency)}
+            </span>
           </div>
           <Link
-            to="/checkout"
+            to={`/courses/${training.id}`}
             className="w-full py-3 rounded-xl font-semibold text-white flex items-center justify-center gap-2 transition-all active:scale-[0.97]"
             style={{ backgroundColor: 'var(--ace-brand)', boxShadow: '0 2px 10px rgba(0,162,182,0.25)', display: 'flex', fontSize: '0.85rem', fontFamily: 'var(--ace-font)' }}
             onMouseEnter={e => (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--ace-brand-hover)'}
@@ -172,7 +185,7 @@ function TrainingCard({ training }: { training: Training }) {
 function SelfPacedCard({ course }: { course: ApiCourse }) {
   return (
     <Link
-      to={`/courses/${course.id}`}
+      to={`/courses/${course.slug ?? course.id}`}
       className="rounded-2xl overflow-hidden flex flex-col group transition-all duration-300 hover:-translate-y-1"
       style={{ backgroundColor: 'var(--card)', border: '1px solid var(--border)', boxShadow: 'var(--ace-shadow-sm)', textDecoration: 'none' }}
     >
@@ -221,7 +234,9 @@ function SelfPacedCard({ course }: { course: ApiCourse }) {
           )}
         </div>
         <div className="flex items-center justify-between pt-3" style={{ borderTop: '1px solid var(--border)' }}>
-          <span style={{ fontSize: '1rem', fontWeight: 900, color: 'var(--ace-brand)', fontFamily: 'var(--ace-font)' }}>₦60,000</span>
+          <span style={{ fontSize: '1rem', fontWeight: 900, color: 'var(--ace-brand)', fontFamily: 'var(--ace-font)' }}>
+            {formatPrice(course.price ?? 0, course.currency)}
+          </span>
           <span className="flex items-center gap-1" style={{ fontSize: '0.78rem', fontWeight: 600, color: 'var(--ace-brand)', fontFamily: 'var(--ace-font)' }}>
             View <ChevronRight className="h-3.5 w-3.5" />
           </span>
@@ -233,27 +248,13 @@ function SelfPacedCard({ course }: { course: ApiCourse }) {
 
 /* ─── Self-Paced section (API-driven) ──────────────────────────────── */
 
-const SELF_PACED_FALLBACK: ApiCourse[] = CSV_COURSES.slice(0, 8).map((c) => ({
-  id: c.id,
-  title: c.title,
-  description: c.description,
-  image: c.image,
-  duration: c.duration,
-  videos: c.videos,
-  questions: c.questions,
-  category: c.category,
-  price: c.price,
-  format: 'Self-Paced',
-  level: 'Intermediate',
-}));
-
 function SelfPacedSection() {
   const { data, loading, error, slowConnection, refetch } = useApi(
     () => apiGetCourses({ format: 'self-paced' }),
     [],
   );
 
-  const courses: ApiCourse[] = (data && data.length > 0) ? data : SELF_PACED_FALLBACK;
+  const courses: ApiCourse[] = data ?? [];
 
   return (
     <div>
@@ -459,14 +460,6 @@ function BusinessView() {
         ))}
       </div>
 
-      {/* Corporate training cards */}
-      <h3 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--foreground)', marginBottom: 16, fontFamily: 'var(--ace-font)' }}>Corporate Training Packages</h3>
-      <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5 mb-12">
-        {TRAININGS.filter(t => t.format === 'Corporate').map((t) => (
-          <TrainingCard key={t.id} training={t} />
-        ))}
-      </div>
-
       {/* Quote request form */}
       <div className="rounded-3xl p-8" style={{ background: 'linear-gradient(135deg,#050D1A,#0A1628)', border: '1px solid rgba(255,255,255,0.08)' }}>
         <h3 className="text-white mb-2" style={{ fontSize: '1.2rem', fontWeight: 800, fontFamily: 'var(--ace-font)' }}>Request a Corporate Quote</h3>
@@ -534,12 +527,17 @@ function OverviewView() {
   const [activeLevel, setActiveLevel] = useState<Level>('All');
   const [query, setQuery] = useState('');
 
-  const filtered = useMemo(() => TRAININGS.filter((t) => {
+  /* GET /api/courses — the whole published catalog, projected onto the
+     training card shape and filtered client-side. */
+  const { data, loading, error } = useApi(() => apiGetCourses({ limit: 100 }), []);
+  const trainings = useMemo(() => (data ?? []).map(toTraining), [data]);
+
+  const filtered = useMemo(() => trainings.filter((t) => {
     const mF = activeFormat === 'All' || t.format === activeFormat;
     const mL = activeLevel === 'All' || t.level === activeLevel;
     const mQ = !query || t.title.toLowerCase().includes(query.toLowerCase()) || t.cert.toLowerCase().includes(query.toLowerCase()) || t.vendor.toLowerCase().includes(query.toLowerCase());
     return mF && mL && mQ;
-  }), [activeFormat, activeLevel, query]);
+  }), [trainings, activeFormat, activeLevel, query]);
 
   return (
     <div>
@@ -592,10 +590,18 @@ function OverviewView() {
         </span>
       </div>
 
-      {filtered.length === 0 ? (
+      {loading ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 mb-12">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="rounded-2xl animate-pulse" style={{ height: 260, backgroundColor: 'var(--muted)' }} />
+          ))}
+        </div>
+      ) : filtered.length === 0 ? (
         <div className="text-center py-24">
           <BookOpen className="h-12 w-12 mx-auto mb-4" style={{ color: 'var(--border)' }} />
-          <p style={{ fontWeight: 500, color: 'var(--muted-foreground)', fontFamily: 'var(--ace-font)' }}>No courses found</p>
+          <p style={{ fontWeight: 500, color: 'var(--muted-foreground)', fontFamily: 'var(--ace-font)' }}>
+            {error ? `Could not load courses: ${error}` : trainings.length === 0 ? 'No courses have been published yet' : 'No courses match your filters'}
+          </p>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5 mb-12">
