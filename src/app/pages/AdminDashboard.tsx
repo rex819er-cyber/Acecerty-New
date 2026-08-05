@@ -12,13 +12,13 @@ import {
   adminPublishCourse, adminUploadImage, adminGetPrices, adminUpsertPrice, adminDeletePrice,
   adminGetExams, adminCreateExam, adminPublishExam, adminGetQuestions, adminCreateQuestion,
   adminImportQuestions, adminGetOrdersList, adminGetUsers, adminGetPayments, adminGetLeads, adminGetAuditLogs,
-  adminAddModule, adminAddLesson, adminAddExamForm, adminGetExamProduct, adminUpdateLeadStatus,
+  adminAddModule, adminAddLesson, adminDeleteModule, adminDeleteLesson, adminAddExamForm, adminGetExamProduct, adminUpdateLeadStatus,
   adminGetCourseOutline, clearAdminToken, formatPrice, minorToMajor,
 } from '../lib/api';
 import type {
   AdminStats, AdminCourse, ProductPrice, AdminExamProduct, AdminQuestion,
   AdminOrder, AdminPayment, AdminLead, AdminAuditLog, AdminUser,
-  AdminModuleWithLessons, ItemType, ExamForm,
+  AdminModuleWithLessons, AdminLesson, ItemType, ExamForm,
 } from '../lib/api';
 
 type Section = 'overview'|'courses'|'prices'|'modules'|'exams'|'orders'|'users'|'payments'|'leads'|'audit';
@@ -152,6 +152,17 @@ function ConfirmModal({
   );
 }
 
+function Pager({ page, totalPages, onChange }: { page: number; totalPages: number; onChange: (p: number) => void }) {
+  if (totalPages <= 1) return null;
+  return (
+    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 14, marginTop: 18 }}>
+      <Btn size="sm" variant="ghost" disabled={page <= 1} onClick={() => onChange(page - 1)}>Prev</Btn>
+      <span style={{ color: 'var(--muted-foreground)', fontFamily: 'var(--ace-font)', fontSize: '0.8rem' }}>Page {page} of {totalPages}</span>
+      <Btn size="sm" variant="ghost" disabled={page >= totalPages} onClick={() => onChange(page + 1)}>Next</Btn>
+    </div>
+  );
+}
+
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div style={{ marginBottom: 14 }}>
@@ -162,7 +173,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 /* ── helper: live fetch with slow/error state ──────────────────────────── */
-function useLive<T>(fetcher: () => Promise<T>, fallback: T) {
+function useLive<T>(fetcher: () => Promise<T>, fallback: T, deps: unknown[] = []) {
   const [data, setData]   = useState<T>(fallback);
   const [slow, setSlow]   = useState(false);
   const [err, setErr]     = useState('');
@@ -177,7 +188,7 @@ function useLive<T>(fetcher: () => Promise<T>, fallback: T) {
       .finally(() => { clearTimeout(t); setSlow(false); setLd(false); });
   }
 
-  useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { load(); }, deps); // eslint-disable-line react-hooks/exhaustive-deps
   return { data, setData, slow, err, loading, reload: load };
 }
 
@@ -326,7 +337,7 @@ function CoursesSection() {
     <div>
       {slow && <ColdBanner msg="Loading courses from backend…" />}
       {err  && <ErrBanner msg={err} onRetry={reload} />}
-      <SectionHeader title={`Courses (${courses.length})`} action={<Btn onClick={openCreate}><Plus size={14} /> New Course</Btn>} />
+      <SectionHeader title="Courses" action={<Btn onClick={openCreate}><Plus size={14} /> New Course</Btn>} />
       <TblWrap>
         <thead><tr><Th>Title</Th><Th>Category</Th><Th>Level</Th><Th>Price</Th><Th>Status</Th><Th>Actions</Th></tr></thead>
         <tbody>
@@ -418,6 +429,7 @@ function PricesSection() {
   const [editVal, setEditVal] = useState('');
   const [showAdd, setShowAdd] = useState(false);
   const [addForm, setAddForm] = useState({ currency: 'USD', amount: '' });
+  const [confirmDelete, setConfirmDelete] = useState<ProductPrice | null>(null);
 
   const options = itemType === 'exam_product'
     ? exams.map(e => ({ id: e.id, label: e.title }))
@@ -449,7 +461,10 @@ function PricesSection() {
     await upsert(p.currency, Number(editVal)).catch(() => {});
     setEditing(null);
   }
-  async function doDelete(id: string) {
+  async function doDelete() {
+    if (!confirmDelete) return;
+    const id = confirmDelete.id;
+    setConfirmDelete(null);
     await adminDeletePrice(id).catch(() => {}); setPrices(ps => ps.filter(p => p.id !== id));
   }
   async function addPrice() {
@@ -462,7 +477,7 @@ function PricesSection() {
       {loading && <ColdBanner msg="Loading prices from backend…" />}
       {err     && <ErrBanner msg={err} onRetry={() => load(itemType, itemId)} />}
       <SectionHeader
-        title={`Regional Prices (${prices.length})`}
+        title="Regional Prices"
         action={<Btn onClick={() => setShowAdd(true)} disabled={!itemId}><Plus size={14} /> Add Currency</Btn>}
       />
 
@@ -504,7 +519,7 @@ function PricesSection() {
                   {editing === p.id
                     ? <Btn size="sm" onClick={() => saveEdit(p)}><CheckCircle2 size={12} /></Btn>
                     : <Btn size="sm" variant="ghost" onClick={() => { setEditing(p.id); setEditVal(p.amount.toString()); }}><Edit2 size={12} /></Btn>}
-                  <Btn size="sm" variant="danger" onClick={() => doDelete(p.id)}><Trash2 size={12} /></Btn>
+                  <Btn size="sm" variant="danger" onClick={() => setConfirmDelete(p)}><Trash2 size={12} /></Btn>
                 </div>
               </Td>
             </tr>
@@ -525,6 +540,15 @@ function PricesSection() {
           </div>
         </Modal>
       )}
+      {confirmDelete && (
+        <ConfirmModal
+          title="Delete regional price"
+          message={`Delete the ${confirmDelete.currency} price? The item falls back to its NGN base price for buyers in that region.`}
+          confirmLabel="Delete"
+          onConfirm={doDelete}
+          onCancel={() => setConfirmDelete(null)}
+        />
+      )}
     </div>
   );
 }
@@ -537,6 +561,8 @@ function ModulesSection() {
   const [newLessons, setNewLessons] = useState<Record<string, string>>({});
   const [openMods, setOpenMods]     = useState<Set<string>>(new Set());
   const [outlineErr, setOutlineErr] = useState('');
+  const [confirmDeleteMod, setConfirmDeleteMod]       = useState<AdminModuleWithLessons | null>(null);
+  const [confirmDeleteLesson, setConfirmDeleteLesson] = useState<{ moduleId: string; lesson: AdminLesson } | null>(null);
 
   /* Load the saved outline when a course is picked — modules and lessons are
      nested inside GET /admin/courses/:id. */
@@ -568,6 +594,26 @@ function ModulesSection() {
     } catch (e: any) { setOutlineErr(e?.message ?? 'Could not add lesson'); }
   }
 
+  async function doDeleteModule() {
+    if (!confirmDeleteMod) return;
+    const id = confirmDeleteMod.id;
+    setConfirmDeleteMod(null);
+    try {
+      await adminDeleteModule(id);
+      setModules(ms => ms.filter(m => m.id !== id));
+    } catch (e: any) { setOutlineErr(e?.message ?? 'Could not delete module'); }
+  }
+
+  async function doDeleteLesson() {
+    if (!confirmDeleteLesson) return;
+    const { moduleId, lesson } = confirmDeleteLesson;
+    setConfirmDeleteLesson(null);
+    try {
+      await adminDeleteLesson(lesson.id);
+      setModules(ms => ms.map(m => m.id === moduleId ? { ...m, lessons: m.lessons.filter(l => l.id !== lesson.id) } : m));
+    } catch (e: any) { setOutlineErr(e?.message ?? 'Could not delete lesson'); }
+  }
+
   return (
     <div>
       {cSlow && <ColdBanner msg="Loading courses…" />}
@@ -590,21 +636,29 @@ function ModulesSection() {
             const isOpen = openMods.has(mod.id);
             return (
               <div key={mod.id} style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 10, marginBottom: 10 }}>
-                <button style={{ width: '100%', padding: '12px 16px', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
-                  onClick={() => setOpenMods(s => { const n = new Set(s); n.has(mod.id) ? n.delete(mod.id) : n.add(mod.id); return n; })}>
-                  <span style={{ color: 'var(--foreground)', fontFamily: 'var(--ace-font)', fontWeight: 600 }}>
-                    {mod.title}
-                    <span style={{ color: 'var(--muted-foreground)', fontWeight: 400, marginLeft: 8, fontSize: '0.8rem' }}>
-                      {mod.lessons.length} {mod.lessons.length === 1 ? 'lesson' : 'lessons'}
+                <div style={{ width: '100%', padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                  <button style={{ flex: 1, minWidth: 0, background: 'none', border: 'none', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: 0, textAlign: 'left' }}
+                    onClick={() => setOpenMods(s => { const n = new Set(s); n.has(mod.id) ? n.delete(mod.id) : n.add(mod.id); return n; })}>
+                    <span style={{ color: 'var(--foreground)', fontFamily: 'var(--ace-font)', fontWeight: 600 }}>
+                      {mod.title}
+                      <span style={{ color: 'var(--muted-foreground)', fontWeight: 400, marginLeft: 8, fontSize: '0.8rem' }}>
+                        {mod.lessons.length} {mod.lessons.length === 1 ? 'lesson' : 'lessons'}
+                      </span>
                     </span>
-                  </span>
-                  {isOpen ? <ChevronUp size={15} style={{ color: 'var(--muted-foreground)' }} /> : <ChevronDown size={15} style={{ color: 'var(--muted-foreground)' }} />}
-                </button>
+                    {isOpen ? <ChevronUp size={15} style={{ color: 'var(--muted-foreground)' }} /> : <ChevronDown size={15} style={{ color: 'var(--muted-foreground)' }} />}
+                  </button>
+                  <Btn size="sm" variant="danger" onClick={() => setConfirmDeleteMod(mod)}><Trash2 size={12} /></Btn>
+                </div>
                 {isOpen && (
                   <div style={{ padding: '0 16px 14px' }}>
                     {mod.lessons.map((l, li) => (
                       <div key={l.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 0', borderTop: '1px solid var(--border)', color: 'var(--muted-foreground)', fontFamily: 'var(--ace-font)', fontSize: '0.83rem' }}>
-                        <span style={{ opacity: 0.6, minWidth: 18 }}>{li + 1}.</span> {l.title}
+                        <span style={{ opacity: 0.6, minWidth: 18 }}>{li + 1}.</span>
+                        <span style={{ flex: 1 }}>{l.title}</span>
+                        <button onClick={() => setConfirmDeleteLesson({ moduleId: mod.id, lesson: l })}
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted-foreground)', display: 'flex', padding: 2 }}>
+                          <Trash2 size={12} />
+                        </button>
                       </div>
                     ))}
                     <div style={{ display: 'flex', gap: 8, marginTop: mod.lessons.length ? 10 : 0 }}>
@@ -617,6 +671,24 @@ function ModulesSection() {
             );
           })}
         </>
+      )}
+      {confirmDeleteMod && (
+        <ConfirmModal
+          title="Delete module"
+          message={`Delete "${confirmDeleteMod.title}"? Its ${confirmDeleteMod.lessons.length} ${confirmDeleteMod.lessons.length === 1 ? 'lesson' : 'lessons'} will be removed too.`}
+          confirmLabel="Delete"
+          onConfirm={doDeleteModule}
+          onCancel={() => setConfirmDeleteMod(null)}
+        />
+      )}
+      {confirmDeleteLesson && (
+        <ConfirmModal
+          title="Delete lesson"
+          message={`Delete "${confirmDeleteLesson.lesson.title}"?`}
+          confirmLabel="Delete"
+          onConfirm={doDeleteLesson}
+          onCancel={() => setConfirmDeleteLesson(null)}
+        />
       )}
     </div>
   );
@@ -690,7 +762,7 @@ function ExamsSection() {
     <div>
       {slow && <ColdBanner msg="Loading exams from backend…" />}
       {err  && <ErrBanner msg={err} onRetry={reload} />}
-      <SectionHeader title={`Exam Products (${exams.length})`} action={<Btn onClick={() => setShowCreate(true)}><Plus size={14} /> New Exam</Btn>} />
+      <SectionHeader title="Exam Products" action={<Btn onClick={() => setShowCreate(true)}><Plus size={14} /> New Exam</Btn>} />
       <TblWrap>
         <thead><tr><Th>Title</Th><Th>Questions</Th><Th>Duration</Th><Th>Price</Th><Th>Status</Th><Th>Actions</Th></tr></thead>
         <tbody>
@@ -718,7 +790,7 @@ function ExamsSection() {
       {selectedProduct && (
         <div style={{ marginTop: 28 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-            <h3 style={{ color: 'var(--foreground)', fontFamily: 'var(--ace-font)', fontWeight: 700 }}>Exam Forms ({forms.length})</h3>
+            <h3 style={{ color: 'var(--foreground)', fontFamily: 'var(--ace-font)', fontWeight: 700 }}>Exam Forms</h3>
             <Btn size="sm" variant="ghost" onClick={() => setShowAddForm(true)}><Plus size={12} /> New Form</Btn>
           </div>
           {forms.length === 0 ? (
@@ -740,7 +812,7 @@ function ExamsSection() {
       {selectedForm && (
         <div style={{ marginTop: 28 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-            <h3 style={{ color: 'var(--foreground)', fontFamily: 'var(--ace-font)', fontWeight: 700 }}>Question Bank ({questions.length})</h3>
+            <h3 style={{ color: 'var(--foreground)', fontFamily: 'var(--ace-font)', fontWeight: 700 }}>Question Bank</h3>
             <Btn size="sm" variant="ghost" onClick={() => setShowImport(true)}><Upload size={12} /> CSV Import</Btn>
           </div>
           <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 12, padding: 18, marginBottom: 14 }}>
@@ -822,7 +894,10 @@ function ExamsSection() {
 
 /* GET /api/admin/users — platform analytics: accounts, roles, growth */
 function UsersSection() {
-  const { data: users, slow, err, reload } = useLive(() => adminGetUsers(), [] as AdminUser[]);
+  const [page, setPage] = useState(1);
+  const EMPTY = { users: [] as AdminUser[], total: 0, totalPages: 1 };
+  const { data, slow, err, reload } = useLive(() => adminGetUsers(page), EMPTY, [page]);
+  const { users, total, totalPages } = data;
 
   const admins   = users.filter(u => u.role === 'admin').length;
   const students = users.length - admins;
@@ -833,12 +908,12 @@ function UsersSection() {
       {err  && <ErrBanner msg={err} onRetry={reload} />}
 
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-        <StatCard icon={<Users size={22} />}   label="Total Accounts" value={users.length.toLocaleString()} color="var(--ace-brand)" />
-        <StatCard icon={<BookOpen size={22} />} label="Students"      value={students.toLocaleString()}     color="#a78bfa" />
-        <StatCard icon={<UserCog size={22} />}  label="Admins"        value={admins.toLocaleString()}       color="#fb923c" />
+        <StatCard icon={<Users size={22} />}   label="Total Accounts" value={total.toLocaleString()}    color="var(--ace-brand)" />
+        <StatCard icon={<BookOpen size={22} />} label="Students (page)" value={students.toLocaleString()} color="#a78bfa" />
+        <StatCard icon={<UserCog size={22} />}  label="Admins (page)"   value={admins.toLocaleString()}   color="#fb923c" />
       </div>
 
-      <SectionHeader title={`Users (${users.length})`} action={<Btn variant="ghost" size="sm" onClick={reload}><RefreshCw size={12} /> Refresh</Btn>} />
+      <SectionHeader title="Users" action={<Btn variant="ghost" size="sm" onClick={reload}><RefreshCw size={12} /> Refresh</Btn>} />
       <TblWrap>
         <thead><tr><Th>Name</Th><Th>Email</Th><Th>Role</Th><Th>Joined</Th></tr></thead>
         <tbody>
@@ -855,6 +930,7 @@ function UsersSection() {
           ))}
         </tbody>
       </TblWrap>
+      <Pager page={page} totalPages={totalPages} onChange={setPage} />
     </div>
   );
 }
@@ -885,7 +961,7 @@ function OrdersSection() {
           color="#fb923c" />
       </div>
 
-      <SectionHeader title={`Orders (${data.length})`} action={<Btn variant="ghost" size="sm" onClick={reload}><RefreshCw size={12} /> Refresh</Btn>} />
+      <SectionHeader title="Orders" action={<Btn variant="ghost" size="sm" onClick={reload}><RefreshCw size={12} /> Refresh</Btn>} />
       <TblWrap>
         <thead><tr><Th>Order ID</Th><Th>User</Th><Th>Total</Th><Th>Status</Th><Th>Date</Th></tr></thead>
         <tbody>
@@ -909,7 +985,7 @@ function PaymentsSection() {
     <div>
       {slow && <ColdBanner msg="Loading payments from backend…" />}
       {err  && <ErrBanner msg={err} onRetry={reload} />}
-      <SectionHeader title={`Payments (${data.length})`} />
+      <SectionHeader title="Payments" />
       <TblWrap>
         <thead><tr><Th>ID</Th><Th>Order</Th><Th>Amount</Th><Th>Method</Th><Th>Status</Th><Th>Date</Th></tr></thead>
         <tbody>
@@ -947,7 +1023,7 @@ function LeadsSection() {
     <div>
       {slow && <ColdBanner msg="Loading leads from backend…" />}
       {err  && <ErrBanner msg={err} onRetry={reload} />}
-      <SectionHeader title={`Leads (${data.length})`} />
+      <SectionHeader title="Leads" />
       <TblWrap>
         <thead><tr><Th>Name</Th><Th>Email</Th><Th>Phone</Th><Th>Type</Th><Th>Status</Th><Th>Date</Th></tr></thead>
         <tbody>
@@ -980,7 +1056,7 @@ function AuditSection() {
     <div>
       {slow && <ColdBanner msg="Loading audit logs from backend…" />}
       {err  && <ErrBanner msg={err} onRetry={reload} />}
-      <SectionHeader title={`Audit Logs (${data.length})`} />
+      <SectionHeader title="Audit Logs" />
       <TblWrap>
         <thead><tr><Th>Time</Th><Th>User</Th><Th>Action</Th><Th>Resource</Th></tr></thead>
         <tbody>

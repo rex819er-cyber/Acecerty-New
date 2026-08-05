@@ -113,6 +113,12 @@ function pageTotal(raw: unknown): number {
   return (raw as Paginated<unknown> | null)?.meta?.total ?? page(raw).length;
 }
 
+/** Total page count from a `{ data, meta }` envelope, falling back to 1. */
+function pageTotalPages(raw: unknown): number {
+  if (Array.isArray(raw)) return 1;
+  return (raw as Paginated<unknown> | null)?.meta?.totalPages ?? 1;
+}
+
 /** Builds a query string, dropping undefined/empty values. */
 function qs(params?: Record<string, unknown>): string {
   if (!params) return '';
@@ -885,8 +891,10 @@ export const adminUpdateInstructor = (id: string, d: Partial<ApiInstructor>) =>
 export const adminDeleteInstructor = (id: string) => request<void>(`/admin/instructors/${id}`, { method: 'DELETE' });
 
 /* Users */
-export const adminGetUsers = async (page_ = 1) =>
-  page<AdminUser>(await request<unknown>(`/admin/users${qs({ page: page_ })}`));
+export const adminGetUsers = async (page_ = 1) => {
+  const raw = await request<unknown>(`/admin/users${qs({ page: page_ })}`);
+  return { users: page<AdminUser>(raw), total: pageTotal(raw), totalPages: pageTotalPages(raw) };
+};
 export const adminUpdateUser = (id: string, d: { fullName?: string; role?: string; status?: string }) =>
   request<AdminUser>(`/admin/users/${id}`, { method: 'PATCH', body: JSON.stringify(d) });
 
