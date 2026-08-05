@@ -74,6 +74,16 @@ function Badge({ status }: { status: string }) {
   return <span style={{ background: s.bg, color: s.color, borderRadius: 20, padding: '2px 10px', fontSize: '0.72rem', fontWeight: 600, fontFamily: 'var(--ace-font)' }}>{status}</span>;
 }
 
+function RoleBadge({ role }: { role: string }) {
+  const map: Record<string, { bg: string; color: string }> = {
+    admin:      { bg: 'rgba(251,146,60,0.15)', color: '#fb923c' },
+    instructor: { bg: 'rgba(99,102,241,0.15)', color: '#818cf8' },
+    student:    { bg: 'rgba(167,139,250,0.15)', color: '#a78bfa' },
+  };
+  const s = map[role?.toLowerCase()] ?? { bg: 'rgba(156,163,175,0.15)', color: '#9ca3af' };
+  return <span style={{ background: s.bg, color: s.color, borderRadius: 20, padding: '2px 10px', fontSize: '0.72rem', fontWeight: 600, fontFamily: 'var(--ace-font)', textTransform: 'capitalize' }}>{role || '—'}</span>;
+}
+
 function TblWrap({ children }: { children: React.ReactNode }) {
   return <div style={{ overflowX: 'auto', borderRadius: 12, border: '1px solid var(--border)' }}><table style={{ width: '100%', borderCollapse: 'collapse' }}>{children}</table></div>;
 }
@@ -123,6 +133,22 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
         {children}
       </div>
     </div>
+  );
+}
+
+function ConfirmModal({
+  title = 'Are you sure?', message, confirmLabel = 'Delete', danger = true, onConfirm, onCancel,
+}: {
+  title?: string; message: string; confirmLabel?: string; danger?: boolean; onConfirm: () => void; onCancel: () => void;
+}) {
+  return (
+    <Modal title={title} onClose={onCancel}>
+      <p style={{ color: 'var(--muted-foreground)', fontFamily: 'var(--ace-font)', fontSize: '0.88rem', lineHeight: 1.55, marginBottom: 22 }}>{message}</p>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+        <Btn variant="ghost" onClick={onCancel}>Cancel</Btn>
+        <Btn variant={danger ? 'danger' : undefined} onClick={onConfirm}>{confirmLabel}</Btn>
+      </div>
+    </Modal>
   );
 }
 
@@ -251,6 +277,7 @@ function CoursesSection() {
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [saving, setSaving]       = useState(false);
   const [deleting, setDeleting]   = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<AdminCourse | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   function openCreate() { setEditing(null); setForm({ title: '', description: '', category: '', level: 'Intermediate', format: 'online', price: '' }); setShowModal(true); }
@@ -280,8 +307,10 @@ function CoursesSection() {
   }
 
   /* DELETE /api/admin/courses/{id} — removes it from the public catalog too */
-  async function remove(c: AdminCourse) {
-    if (!window.confirm(`Delete "${c.title}"? This removes it from the public catalog immediately.`)) return;
+  async function remove() {
+    if (!confirmDelete) return;
+    const c = confirmDelete;
+    setConfirmDelete(null);
     setDeleting(c.id);
     try {
       await adminDeleteCourse(c.id);
@@ -316,7 +345,7 @@ function CoursesSection() {
                   <Btn size="sm" variant={c.published ? 'ghost' : 'outline'} onClick={() => togglePublish(c)}>
                     {c.published ? <EyeOff size={12} /> : <Eye size={12} />}
                   </Btn>
-                  <Btn size="sm" variant="danger" disabled={deleting === c.id} onClick={() => remove(c)}>
+                  <Btn size="sm" variant="danger" disabled={deleting === c.id} onClick={() => setConfirmDelete(c)}>
                     <Trash2 size={12} />
                   </Btn>
                 </div>
@@ -356,6 +385,15 @@ function CoursesSection() {
             <Btn onClick={save} disabled={saving}><Save size={13} /> {saving ? 'Saving…' : 'Save'}</Btn>
           </div>
         </Modal>
+      )}
+      {confirmDelete && (
+        <ConfirmModal
+          title="Delete course"
+          message={`Delete "${confirmDelete.title}"? This removes it from the public catalog immediately.`}
+          confirmLabel="Delete"
+          onConfirm={remove}
+          onCancel={() => setConfirmDelete(null)}
+        />
       )}
     </div>
   );
@@ -811,7 +849,7 @@ function UsersSection() {
             <tr key={u.id}>
               <Td><span style={{ color: 'var(--foreground)', fontWeight: 600 }}>{u.fullName ?? u.name ?? '—'}</span></Td>
               <Td>{u.email}</Td>
-              <Td><Badge status={u.role === 'admin' ? 'published' : 'pending'} /></Td>
+              <Td><RoleBadge role={u.role} /></Td>
               <Td>{u.createdAt ? new Date(u.createdAt).toLocaleDateString() : '—'}</Td>
             </tr>
           ))}
@@ -1018,7 +1056,7 @@ export default function AdminDashboard() {
         width: 232, flexShrink: 0, background: 'var(--card)', borderRight: '1px solid var(--border)',
         display: 'flex', flexDirection: 'column', position: 'fixed', top: 0, left: 0, bottom: 0, zIndex: 110,
         transform: sideOpen ? 'translateX(0)' : 'translateX(-100%)', transition: 'transform 0.25s',
-      }} className="lg:!translate-x-0">
+      }} className="lg:[transform:translateX(0)]!">
         <div style={{ padding: '20px 18px 14px', display: 'flex', alignItems: 'center', gap: 10, borderBottom: '1px solid var(--border)' }}>
           <div style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--ace-brand)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <LayoutDashboard size={15} color="var(--primary-foreground)" />
