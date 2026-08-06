@@ -8,13 +8,13 @@
    developer portal.
 ───────────────────────────────────────────────────────────────────────── */
 
-export const GOOGLE_CLIENT_ID =
-  import.meta.env.VITE_GOOGLE_CLIENT_ID ?? 'YOUR_GOOGLE_CLIENT_ID_HERE';
+export const GOOGLE_CLIENT_ID: string =
+  (import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined) ?? '';
 
-export const LINKEDIN_CLIENT_ID =
-  import.meta.env.VITE_LINKEDIN_CLIENT_ID ?? 'YOUR_LINKEDIN_CLIENT_ID_HERE';
+export const LINKEDIN_CLIENT_ID: string =
+  (import.meta.env.VITE_LINKEDIN_CLIENT_ID as string | undefined) ?? '';
 
-export const isPlaceholder = (id: string) => id.startsWith('YOUR_');
+export const isPlaceholder = (id: string) => !id || !id.trim();
 
 /* ── Google Identity Services ─────────────────────────────────────────── */
 

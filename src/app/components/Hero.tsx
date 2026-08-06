@@ -1,12 +1,16 @@
-import React, { useMemo } from 'react';
-import { motion } from 'motion/react';
-import { ArrowRight, CheckCircle, Sparkles, Zap, Tag } from 'lucide-react';
+import React, { useRef } from 'react';
+import { motion, useInView } from 'motion/react';
+import { ArrowRight, CheckCircle, Users, Star, Award, Package, Zap, Tag } from 'lucide-react';
 import { Link } from 'react-router';
 import { ConstellationCanvas } from './ConstellationCanvas';
-import { useApi, apiGetCourses, formatPrice, type ApiCourse } from '../lib/api';
+import { BEGINNER_BUNDLE } from '../data/csvCourses';
 
-/* Vendor marks, not fabricated records — these are the real certification
-   bodies the platform trains for. */
+const STATS = [
+  { value: '250k+', label: 'Certified', icon: Users },
+  { value: '95%', label: 'Pass Rate', icon: Star },
+  { value: '100+', label: 'Certs', icon: Award },
+];
+
 const CERT_BADGES = [
   { name: 'CompTIA', color: '#E31837', abbr: 'C+' },
   { name: 'Cisco', color: '#1BA0D7', abbr: 'CI' },
@@ -18,15 +22,29 @@ const CERT_BADGES = [
   { name: 'ISACA', color: '#1A5276', abbr: 'ISA' },
 ];
 
-/* Promotes one real, currently-discounted course pulled from the catalog —
-   never a fabricated "bundle" — so the price/savings shown are always live. */
-function DealPromoCard({ course }: { course: ApiCourse }) {
-  const price = course.price ?? 0;
-  const original = course.originalPrice ?? price;
-  const onSale = original > price;
-  const savings = onSale ? Math.round((1 - price / original) * 100) : 0;
-  const tags = [course.category, course.level, course.format].filter((t): t is string => Boolean(t));
+function AnimatedCounter({ value, label }: { value: string; label: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const isInView = useInView(ref, { once: true });
+  return (
+    <motion.div
+      ref={ref}
+      initial={{ opacity: 0, y: 16 }}
+      animate={isInView ? { opacity: 1, y: 0 } : {}}
+      transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+      className="flex flex-col items-center sm:items-start"
+    >
+      <span style={{ fontSize: 'clamp(1.4rem, 3vw, 1.9rem)', fontWeight: 900, letterSpacing: '-0.04em', color: 'var(--ace-brand)', lineHeight: 1 }}>
+        {value}
+      </span>
+      <span style={{ fontSize: '0.72rem', fontWeight: 600, opacity: 0.55, letterSpacing: '0.05em', textTransform: 'uppercase', marginTop: 3, fontFamily: 'var(--ace-font)' }}>
+        {label}
+      </span>
+    </motion.div>
+  );
+}
 
+function BundlePromoCard() {
+  const savings = Math.round((1 - BEGINNER_BUNDLE.bundlePrice / BEGINNER_BUNDLE.originalPrice) * 100);
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.95, y: 24 }}
@@ -49,45 +67,48 @@ function DealPromoCard({ course }: { course: ApiCourse }) {
       <div className="px-6 pt-6 pb-4 flex items-start justify-between gap-3">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <Sparkles className="h-4 w-4" style={{ color: 'var(--ace-brand)' }} />
+            <Package className="h-4 w-4" style={{ color: 'var(--ace-brand)' }} />
             <span style={{ fontSize: '0.7rem', fontWeight: 800, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--ace-brand)', fontFamily: 'var(--ace-font)' }}>
-              Featured Deal
+              Bundle Deal
             </span>
           </div>
           <h3 style={{ fontSize: '1.15rem', fontWeight: 800, color: '#ffffff', lineHeight: 1.2, fontFamily: 'var(--ace-font)' }}>
-            {course.shortTitle || course.title}
+            {BEGINNER_BUNDLE.title}
           </h3>
           <p style={{ fontSize: '0.78rem', color: 'rgba(255,255,255,0.5)', marginTop: 4, fontFamily: 'var(--ace-font)' }}>
-            {course.description || 'Industry-recognised IT certification training'}
+            {BEGINNER_BUNDLE.subtitle}
           </p>
         </div>
-        {onSale && (
-          <span
-            className="flex-shrink-0 px-2.5 py-1.5 rounded-full flex items-center gap-1"
-            style={{ backgroundColor: 'rgba(0,162,182,0.2)', border: '1px solid rgba(0,162,182,0.35)' }}
-          >
-            <Tag className="h-3 w-3" style={{ color: 'var(--ace-brand)' }} />
-            <span style={{ fontSize: '0.68rem', fontWeight: 800, color: 'var(--ace-brand)', fontFamily: 'var(--ace-font)' }}>
-              {savings}% OFF
-            </span>
+        {/* Promo badge */}
+        <span
+          className="flex-shrink-0 px-2.5 py-1.5 rounded-full flex items-center gap-1"
+          style={{ backgroundColor: 'rgba(0,162,182,0.2)', border: '1px solid rgba(0,162,182,0.35)' }}
+        >
+          <Tag className="h-3 w-3" style={{ color: 'var(--ace-brand)' }} />
+          <span style={{ fontSize: '0.68rem', fontWeight: 800, color: 'var(--ace-brand)', fontFamily: 'var(--ace-font)' }}>
+            {savings}% OFF
           </span>
-        )}
+        </span>
       </div>
 
       {/* Course tags */}
-      {tags.length > 0 && (
-        <div className="px-6 pb-4 flex flex-wrap gap-1.5">
-          {tags.map((tag) => (
-            <span
-              key={tag}
-              className="px-2.5 py-1 rounded-full"
-              style={{ fontSize: '0.7rem', fontWeight: 600, backgroundColor: 'rgba(255,255,255,0.07)', color: 'rgba(255,255,255,0.65)', border: '1px solid rgba(255,255,255,0.1)', fontFamily: 'var(--ace-font)' }}
-            >
-              {tag}
-            </span>
-          ))}
-        </div>
-      )}
+      <div className="px-6 pb-4 flex flex-wrap gap-1.5">
+        {BEGINNER_BUNDLE.courseNames.map((name) => (
+          <span
+            key={name}
+            className="px-2.5 py-1 rounded-full"
+            style={{ fontSize: '0.7rem', fontWeight: 600, backgroundColor: 'rgba(255,255,255,0.07)', color: 'rgba(255,255,255,0.65)', border: '1px solid rgba(255,255,255,0.1)', fontFamily: 'var(--ace-font)' }}
+          >
+            {name}
+          </span>
+        ))}
+        <span
+          className="px-2.5 py-1 rounded-full"
+          style={{ fontSize: '0.7rem', fontWeight: 600, backgroundColor: 'rgba(0,162,182,0.12)', color: 'var(--ace-brand)', border: '1px solid rgba(0,162,182,0.2)', fontFamily: 'var(--ace-font)' }}
+        >
+          +More
+        </span>
+      </div>
 
       {/* Divider */}
       <div style={{ height: 1, backgroundColor: 'rgba(255,255,255,0.07)', marginInline: 24 }} />
@@ -97,29 +118,27 @@ function DealPromoCard({ course }: { course: ApiCourse }) {
         <div>
           <div className="flex items-baseline gap-2">
             <span style={{ fontSize: '1.65rem', fontWeight: 900, color: 'var(--ace-brand)', lineHeight: 1, fontFamily: 'var(--ace-font)' }}>
-              {formatPrice(price, course.currency)}
+              ₦{BEGINNER_BUNDLE.bundlePrice.toLocaleString()}
             </span>
           </div>
-          {onSale && (
-            <div className="flex items-center gap-2 mt-1">
-              <span style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.35)', textDecoration: 'line-through', fontFamily: 'var(--ace-font)' }}>
-                {formatPrice(original, course.currency)}
-              </span>
-              <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#22c55e', fontFamily: 'var(--ace-font)' }}>
-                Save {formatPrice(original - price, course.currency)}
-              </span>
-            </div>
-          )}
+          <div className="flex items-center gap-2 mt-1">
+            <span style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.35)', textDecoration: 'line-through', fontFamily: 'var(--ace-font)' }}>
+              ₦{BEGINNER_BUNDLE.originalPrice.toLocaleString()}
+            </span>
+            <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#22c55e', fontFamily: 'var(--ace-font)' }}>
+              Save ₦{(BEGINNER_BUNDLE.originalPrice - BEGINNER_BUNDLE.bundlePrice).toLocaleString()}
+            </span>
+          </div>
         </div>
         <Link
-          to={`/courses/${course.slug || course.id}`}
+          to="/checkout"
           className="inline-flex items-center gap-2 px-5 py-3 rounded-2xl font-bold text-white transition-all active:scale-95 flex-shrink-0"
           style={{ backgroundColor: 'var(--ace-brand)', boxShadow: '0 4px 18px rgba(0,162,182,0.4)', fontSize: '0.85rem', fontFamily: 'var(--ace-font)' }}
           onMouseEnter={e => (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--ace-brand-hover)'}
           onMouseLeave={e => (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--ace-brand)'}
         >
           <Zap className="h-3.5 w-3.5" />
-          Enroll Now
+          Buy Bundle
         </Link>
       </div>
 
@@ -133,15 +152,6 @@ function DealPromoCard({ course }: { course: ApiCourse }) {
         </div>
       </div>
     </motion.div>
-  );
-}
-
-function DealPromoCardSkeleton() {
-  return (
-    <div
-      className="relative w-full rounded-3xl overflow-hidden animate-pulse"
-      style={{ background: 'linear-gradient(135deg, #050D1A 0%, #0A1628 55%, #051520 100%)', border: '1px solid rgba(0,162,182,0.15)', minHeight: 320 }}
-    />
   );
 }
 
@@ -182,20 +192,6 @@ function CertBadgesStrip() {
 }
 
 export function Hero() {
-  const { data: courses, loading } = useApi(() => apiGetCourses({ limit: 100 }), []);
-
-  /* Picks one course at random on each load, preferring ones actually on
-     sale so the promo card never advertises a discount that isn't real. */
-  const dealCourse = useMemo(() => {
-    const list = courses ?? [];
-    const discounted = list.filter(c => (c.originalPrice ?? 0) > (c.price ?? 0));
-    const pool = discounted.length ? discounted : list;
-    if (!pool.length) return null;
-    return pool[Math.floor(Math.random() * pool.length)];
-  }, [courses]);
-
-  const showDealPanel = loading || !!dealCourse;
-
   return (
     <section
       className="bg-background text-foreground relative flex items-center pt-16 sm:pt-20 overflow-hidden"
@@ -216,7 +212,7 @@ export function Hero() {
       />
 
       <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full py-12 lg:py-20">
-        <div className={showDealPanel ? 'grid lg:grid-cols-2 gap-10 lg:gap-16 items-center' : 'max-w-3xl'}>
+        <div className="grid lg:grid-cols-2 gap-10 lg:gap-16 items-center">
 
           {/* ── LEFT: Copy ─────────────────────────────────────────── */}
           <div>
@@ -229,7 +225,7 @@ export function Hero() {
             >
               <span className="h-2 w-2 rounded-full animate-pulse flex-shrink-0" style={{ backgroundColor: '#22c55e' }} />
               <span style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--muted-foreground)', fontFamily: 'var(--ace-font)' }}>
-                Enrolling now — start anytime
+                Classes now enrolling · July 2026
               </span>
             </motion.div>
 
@@ -299,21 +295,34 @@ export function Hero() {
               </Link>
             </motion.div>
 
+            {/* Stats row */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.5, delay: 0.3 }}
+              className="flex items-center gap-7 flex-wrap mb-8"
+            >
+              {STATS.map((s, i) => (
+                <React.Fragment key={s.label}>
+                  {i > 0 && <div className="h-8 w-px hidden sm:block bg-border" />}
+                  <AnimatedCounter value={s.value} label={s.label} />
+                </React.Fragment>
+              ))}
+            </motion.div>
+
             {/* Certification badges strip */}
             <CertBadgesStrip />
           </div>
 
-          {/* ── RIGHT: Featured deal, sourced live from the course catalog ── */}
-          {showDealPanel && (
-            <div className="relative">
-              {/* Glow behind card */}
-              <div
-                className="absolute inset-0 pointer-events-none"
-                style={{ background: 'radial-gradient(ellipse at 50% 60%, rgba(0,162,182,0.15) 0%, transparent 65%)', filter: 'blur(24px)', transform: 'scale(1.2)' }}
-              />
-              {dealCourse ? <DealPromoCard course={dealCourse} /> : <DealPromoCardSkeleton />}
-            </div>
-          )}
+          {/* ── RIGHT: Bundle Promo Card ────────────────────────── */}
+          <div className="relative">
+            {/* Glow behind card */}
+            <div
+              className="absolute inset-0 pointer-events-none"
+              style={{ background: 'radial-gradient(ellipse at 50% 60%, rgba(0,162,182,0.15) 0%, transparent 65%)', filter: 'blur(24px)', transform: 'scale(1.2)' }}
+            />
+            <BundlePromoCard />
+          </div>
         </div>
       </div>
     </section>

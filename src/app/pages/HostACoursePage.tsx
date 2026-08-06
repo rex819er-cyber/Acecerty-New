@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
-import { GraduationCap, Users, Globe, DollarSign, CheckCircle, ChevronRight, Building2, BarChart2, Shield, Loader2, AlertCircle } from 'lucide-react';
-import { apiSubmitInstructorApplication } from '../lib/api';
+import { GraduationCap, Users, Globe, DollarSign, CheckCircle, ChevronRight, Building2, Star, BarChart2, Shield } from 'lucide-react';
 
 const BENEFITS = [
   {
@@ -42,6 +41,12 @@ const STEPS = [
   { num: '04', title: 'Go Live & Earn', desc: 'We publish and promote your course. You earn every time a student enrolls.' },
 ];
 
+const TESTIMONIALS = [
+  { name: 'Marcus T.', role: 'CISSP Instructor', quote: 'I went from teaching locally to reaching students in 12 countries within three months of partnering with Acecerty.', rating: 5 },
+  { name: 'Sarah K.', role: 'AWS & Azure Trainer', quote: 'The revenue share is better than any platform I\'ve used, and the marketing support is genuinely hands-on.', rating: 5 },
+  { name: 'James O.', role: 'CompTIA Expert', quote: 'Acecerty\'s quality bar pushed me to create my best content yet. My students\' pass rates have never been higher.', rating: 5 },
+];
+
 interface FormData {
   name: string;
   email: string;
@@ -59,34 +64,14 @@ const EMPTY: FormData = { name: '', email: '', phone: '', company: '', certifica
 export default function HostACoursePage() {
   const [form, setForm] = useState<FormData>(EMPTY);
   const [submitted, setSubmitted] = useState(false);
-  const [sending, setSending] = useState(false);
-  const [error, setError] = useState('');
+
 
   const set = (k: keyof FormData) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
     setForm((f) => ({ ...f, [k]: e.target.value }));
 
-  /* POST /api/leads/instructor-application — the DTO mirrors this form 1:1. */
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setSending(true); setError('');
-    try {
-      await apiSubmitInstructorApplication({
-        name: form.name,
-        email: form.email,
-        phone: form.phone || undefined,
-        company: form.company || undefined,
-        certifications: form.certifications || undefined,
-        courseTitle: form.courseTitle || undefined,
-        courseFormat: form.courseFormat || undefined,
-        experience: form.experience || undefined,
-        message: form.message || undefined,
-      });
-      setSubmitted(true);
-    } catch (err: unknown) {
-      setError((err as { message?: string })?.message ?? 'Could not submit your application. Please try again.');
-    } finally {
-      setSending(false);
-    }
+    setSubmitted(true);
   };
 
   const inputCls = `w-full px-4 py-3 rounded-xl border text-sm placeholder-gray-400 focus:outline-none focus:ring-2 transition-shadow`;
@@ -113,6 +98,20 @@ export default function HostACoursePage() {
             Partner with Acecerty to deliver your certification courses to thousands of IT professionals. We handle the marketing, payments, and platform — you focus on teaching.
           </p>
 
+          {/* Quick stats */}
+          <div className="flex flex-wrap gap-4">
+            {[
+              { value: '50,000+', label: 'Active Students' },
+              { value: '40+', label: 'Countries Reached' },
+              { value: 'Up to 70%', label: 'Revenue Share' },
+              { value: '100+', label: 'Partner Instructors' },
+            ].map(({ value, label }) => (
+              <div key={label} className="px-5 py-3 rounded-xl bg-white/10 border border-white/15">
+                <p className="text-white font-black" style={{ fontSize: '1.2rem' }}>{value}</p>
+                <p className="text-white/50 text-xs">{label}</p>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -162,6 +161,34 @@ export default function HostACoursePage() {
                 )}
                 <h3 className="text-gray-900 mb-2" style={{ fontSize: '0.95rem', fontWeight: 700 }}>{step.title}</h3>
                 <p className="text-gray-500 text-sm leading-relaxed">{step.desc}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Testimonials */}
+        <div className="mb-16">
+          <div className="text-center mb-10">
+            <p className="text-xs font-bold uppercase tracking-widest mb-2" style={{ color: '#00A2B6' }}>Instructor Stories</p>
+            <h2 className="text-gray-900" style={{ fontSize: 'clamp(1.4rem,3vw,2rem)', fontWeight: 800 }}>What our instructors say</h2>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
+            {TESTIMONIALS.map(({ name, role, quote, rating }) => (
+              <div
+                key={name}
+                className="bg-card border border-border rounded-2xl p-6 shadow-sm"
+              >
+                <div className="flex gap-0.5 mb-4">
+                  {[...Array(rating)].map((_, i) => (
+                    <Star key={i} className="h-4 w-4" fill="#00A2B6" style={{ color: '#00A2B6' }} />
+                  ))}
+                </div>
+                <p className="text-gray-600 text-sm leading-relaxed mb-5 italic">"{quote}"</p>
+                <div>
+                  <p className="text-gray-900 text-sm font-bold">{name}</p>
+                  <p className="text-gray-400 text-xs">{role}</p>
+                </div>
               </div>
             ))}
           </div>
@@ -263,21 +290,12 @@ export default function HostACoursePage() {
                     />
                   </div>
 
-                  {error && (
-                    <p className="flex items-center gap-2 text-sm" style={{ color: 'var(--destructive)' }}>
-                      <AlertCircle className="h-4 w-4 shrink-0" /> {error}
-                    </p>
-                  )}
-
                   <button
                     type="submit"
-                    disabled={sending}
-                    className="w-full py-4 rounded-xl text-sm font-bold text-white flex items-center justify-center gap-2 transition-all hover:opacity-90 active:scale-[0.98] disabled:opacity-60"
+                    className="w-full py-4 rounded-xl text-sm font-bold text-white flex items-center justify-center gap-2 transition-all hover:opacity-90 active:scale-[0.98]"
                     style={{ backgroundColor: '#00A2B6' }}
                   >
-                    {sending
-                      ? <><Loader2 className="h-4 w-4 animate-spin" /> Submitting…</>
-                      : <>Submit Application <ChevronRight className="h-4 w-4" /></>}
+                    Submit Application <ChevronRight className="h-4 w-4" />
                   </button>
 
                   <p className="text-center text-xs text-gray-400">

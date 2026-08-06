@@ -1,24 +1,23 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router';
+import { toast } from 'sonner';
 import {
   LayoutDashboard, BookOpen, DollarSign, Layers, ClipboardList,
   ShoppingCart, CreditCard, Users, UserCog, FileText, LogOut, Menu, X,
   Plus, Edit2, Trash2, Upload, Eye, EyeOff, ChevronDown, ChevronUp,
-  Wifi, AlertCircle, CheckCircle2, Save, RefreshCw, Award,
+  Wifi, AlertCircle, CheckCircle2, Save, RefreshCw,
 } from 'lucide-react';
 import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import {
   adminGetStats, adminGetCourses, adminCreateCourse, adminUpdateCourse, adminDeleteCourse,
-  adminPublishCourse, adminUploadImage, adminGetPrices, adminUpsertPrice, adminDeletePrice,
+  adminPublishCourse, adminUploadImage, adminGetPrices, adminUpdatePrice, adminAddPrice, adminDeletePrice,
   adminGetExams, adminCreateExam, adminPublishExam, adminGetQuestions, adminCreateQuestion,
   adminImportQuestions, adminGetOrdersList, adminGetUsers, adminGetPayments, adminGetLeads, adminGetAuditLogs,
-  adminAddModule, adminAddLesson, adminDeleteModule, adminDeleteLesson, adminAddExamForm, adminGetExamProduct, adminUpdateLeadStatus,
-  adminGetCourseOutline, clearAdminToken, formatPrice, minorToMajor,
+  adminAddModule, adminAddLesson, clearAdminToken,
 } from '../lib/api';
 import type {
   AdminStats, AdminCourse, ProductPrice, AdminExamProduct, AdminQuestion,
-  AdminOrder, AdminPayment, AdminLead, AdminAuditLog, AdminUser,
-  AdminModuleWithLessons, AdminLesson, ItemType, ExamForm,
+  AdminOrder, AdminPayment, AdminLead, AdminAuditLog, AdminModule, AdminUser,
 } from '../lib/api';
 
 type Section = 'overview'|'courses'|'prices'|'modules'|'exams'|'orders'|'users'|'payments'|'leads'|'audit';
@@ -74,16 +73,6 @@ function Badge({ status }: { status: string }) {
   return <span style={{ background: s.bg, color: s.color, borderRadius: 20, padding: '2px 10px', fontSize: '0.72rem', fontWeight: 600, fontFamily: 'var(--ace-font)' }}>{status}</span>;
 }
 
-function RoleBadge({ role }: { role: string }) {
-  const map: Record<string, { bg: string; color: string }> = {
-    admin:      { bg: 'rgba(251,146,60,0.15)', color: '#fb923c' },
-    instructor: { bg: 'rgba(99,102,241,0.15)', color: '#818cf8' },
-    student:    { bg: 'rgba(167,139,250,0.15)', color: '#a78bfa' },
-  };
-  const s = map[role?.toLowerCase()] ?? { bg: 'rgba(156,163,175,0.15)', color: '#9ca3af' };
-  return <span style={{ background: s.bg, color: s.color, borderRadius: 20, padding: '2px 10px', fontSize: '0.72rem', fontWeight: 600, fontFamily: 'var(--ace-font)', textTransform: 'capitalize' }}>{role || '—'}</span>;
-}
-
 function TblWrap({ children }: { children: React.ReactNode }) {
   return <div style={{ overflowX: 'auto', borderRadius: 12, border: '1px solid var(--border)' }}><table style={{ width: '100%', borderCollapse: 'collapse' }}>{children}</table></div>;
 }
@@ -136,33 +125,6 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
   );
 }
 
-function ConfirmModal({
-  title = 'Are you sure?', message, confirmLabel = 'Delete', danger = true, onConfirm, onCancel,
-}: {
-  title?: string; message: string; confirmLabel?: string; danger?: boolean; onConfirm: () => void; onCancel: () => void;
-}) {
-  return (
-    <Modal title={title} onClose={onCancel}>
-      <p style={{ color: 'var(--muted-foreground)', fontFamily: 'var(--ace-font)', fontSize: '0.88rem', lineHeight: 1.55, marginBottom: 22 }}>{message}</p>
-      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-        <Btn variant="ghost" onClick={onCancel}>Cancel</Btn>
-        <Btn variant={danger ? 'danger' : undefined} onClick={onConfirm}>{confirmLabel}</Btn>
-      </div>
-    </Modal>
-  );
-}
-
-function Pager({ page, totalPages, onChange }: { page: number; totalPages: number; onChange: (p: number) => void }) {
-  if (totalPages <= 1) return null;
-  return (
-    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 14, marginTop: 18 }}>
-      <Btn size="sm" variant="ghost" disabled={page <= 1} onClick={() => onChange(page - 1)}>Prev</Btn>
-      <span style={{ color: 'var(--muted-foreground)', fontFamily: 'var(--ace-font)', fontSize: '0.8rem' }}>Page {page} of {totalPages}</span>
-      <Btn size="sm" variant="ghost" disabled={page >= totalPages} onClick={() => onChange(page + 1)}>Next</Btn>
-    </div>
-  );
-}
-
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div style={{ marginBottom: 14 }}>
@@ -173,7 +135,8 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 /* ── helper: live fetch with slow/error state ──────────────────────────── */
-function useLive<T>(fetcher: () => Promise<T>, fallback: T, deps: unknown[] = []) {
+function useLive<T>(fetcher: () => Promise<T>, fallback: T) {
+  const navigate = useNavigate();
   const [data, setData]   = useState<T>(fallback);
   const [slow, setSlow]   = useState(false);
   const [err, setErr]     = useState('');
@@ -184,12 +147,32 @@ function useLive<T>(fetcher: () => Promise<T>, fallback: T, deps: unknown[] = []
     const t = setTimeout(() => setSlow(true), 2500);
     fetcher()
       .then(d => setData(d))
-      .catch((e: any) => setErr(e?.message ?? 'Failed to load'))
+      .catch((e: any) => {
+        if (e?.status === 401 || e?.status === 403) {
+          clearAdminToken();
+          navigate('/admin/login', { replace: true });
+          return;
+        }
+        setErr(e?.message ?? 'Failed to load');
+      })
       .finally(() => { clearTimeout(t); setSlow(false); setLd(false); });
   }
 
-  useEffect(() => { load(); }, deps); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   return { data, setData, slow, err, loading, reload: load };
+}
+
+/* Handles 401/403 from CRUD actions — clears token & redirects */
+function useHandleAdminErr() {
+  const navigate = useNavigate();
+  return (e: any): boolean => {
+    if (e?.status === 401 || e?.status === 403) {
+      clearAdminToken();
+      navigate('/admin/login', { replace: true });
+      return true;
+    }
+    return false;
+  };
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
@@ -197,52 +180,25 @@ function useLive<T>(fetcher: () => Promise<T>, fallback: T, deps: unknown[] = []
 ═══════════════════════════════════════════════════════════════════════ */
 
 function OverviewSection() {
-  const EMPTY: AdminStats = {
-    users: { total: 0, students: 0 },
-    revenue: { byCurrency: {}, totalMinor: 0, currency: 'NGN' },
-    orders: { total: 0, byStatus: {} },
-    attempts: { total: 0, graded: 0, passed: 0, passRate: 0 },
-    topProducts: [],
-    revenueOverTime: [],
-  };
+  const EMPTY: AdminStats = { totalRevenue: 0, totalOrders: 0, totalStudents: 0, totalCourses: 0, revenueByMonth: [], ordersByStatus: [] };
   const { data: stats, slow, err, reload } = useLive(adminGetStats, EMPTY);
-
-  /* Revenue is grouped by currency because the backend never sums across
-     them — a chart needs one series, so it plots the base currency
-     (`revenue.currency`) and lists any other currencies as separate figures
-     beneath it rather than mixing them into one misleading number. */
-  const baseCurrency = stats.revenue.currency;
-  const otherCurrencies = Object.entries(stats.revenue.byCurrency).filter(([c]) => c !== baseCurrency);
-
-  const ordersByStatusChart = Object.entries(stats.orders.byStatus).map(([status, count]) => ({ status, count }));
-  const revenueChart = stats.revenueOverTime.map(r => ({ month: r.month, revenue: minorToMajor(r.revenueMinor) }));
 
   return (
     <div>
       {slow && <ColdBanner msg="Connecting to live backend…" />}
       {err  && <ErrBanner msg={err} onRetry={reload} />}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <StatCard icon={<DollarSign size={22} />} label={`Revenue (${baseCurrency})`} value={formatPrice(minorToMajor(stats.revenue.totalMinor), baseCurrency)} color="#22c55e" />
-        <StatCard icon={<ShoppingCart size={22} />} label="Total Orders" value={stats.orders.total.toString()} color="var(--ace-brand)" />
-        <StatCard icon={<Users size={22} />} label="Students"            value={stats.users.students.toLocaleString()} color="#a78bfa" />
-        <StatCard icon={<Award size={22} />} label="Exam Pass Rate"      value={`${stats.attempts.passRate}%`} color="#fb923c" />
+        <StatCard icon={<DollarSign size={22} />} label="Total Revenue"  value={`₦${(stats.totalRevenue / 1000).toFixed(0)}K`} color="#22c55e" />
+        <StatCard icon={<ShoppingCart size={22} />} label="Total Orders" value={stats.totalOrders.toString()} color="var(--ace-brand)" />
+        <StatCard icon={<Users size={22} />} label="Students"            value={stats.totalStudents.toLocaleString()} color="#a78bfa" />
+        <StatCard icon={<BookOpen size={22} />} label="Courses"          value={stats.totalCourses.toString()} color="#fb923c" />
       </div>
-      {otherCurrencies.length > 0 && (
-        <div className="flex flex-wrap gap-3 mb-6">
-          {otherCurrencies.map(([currency, minor]) => (
-            <div key={currency} style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 10, padding: '8px 14px', fontFamily: 'var(--ace-font)' }}>
-              <span style={{ color: 'var(--muted-foreground)', fontSize: '0.75rem' }}>Revenue ({currency}) </span>
-              <span style={{ color: 'var(--foreground)', fontWeight: 700 }}>{formatPrice(minorToMajor(minor), currency)}</span>
-            </div>
-          ))}
-        </div>
-      )}
-      {revenueChart.length > 0 && (
+      {stats.revenueByMonth.length > 0 && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 14, padding: 20 }}>
-            <h3 style={{ color: 'var(--foreground)', fontFamily: 'var(--ace-font)', fontWeight: 700, marginBottom: 16 }}>Monthly Revenue ({baseCurrency})</h3>
+            <h3 style={{ color: 'var(--foreground)', fontFamily: 'var(--ace-font)', fontWeight: 700, marginBottom: 16 }}>Monthly Revenue</h3>
             <ResponsiveContainer width="100%" height={200}>
-              <AreaChart data={revenueChart}>
+              <AreaChart data={stats.revenueByMonth}>
                 <defs>
                   <linearGradient id="rg" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%"  stopColor="var(--ace-brand)" stopOpacity={0.4} />
@@ -251,8 +207,8 @@ function OverviewSection() {
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                 <XAxis dataKey="month" tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={v => formatPrice(v, baseCurrency)} />
-                <Tooltip contentStyle={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 8, fontFamily: 'var(--ace-font)' }} formatter={(v: number) => [formatPrice(v, baseCurrency), 'Revenue']} />
+                <YAxis tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={v => `₦${(v/1000).toFixed(0)}K`} />
+                <Tooltip contentStyle={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 8, fontFamily: 'var(--ace-font)' }} formatter={(v: number) => [`₦${v.toLocaleString()}`, 'Revenue']} />
                 <Area type="monotone" dataKey="revenue" stroke="var(--ace-brand)" fill="url(#rg)" strokeWidth={2} />
               </AreaChart>
             </ResponsiveContainer>
@@ -260,7 +216,7 @@ function OverviewSection() {
           <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 14, padding: 20 }}>
             <h3 style={{ color: 'var(--foreground)', fontFamily: 'var(--ace-font)', fontWeight: 700, marginBottom: 16 }}>Orders by Status</h3>
             <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={ordersByStatusChart}>
+              <BarChart data={stats.ordersByStatus}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                 <XAxis dataKey="status" tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fill: 'var(--muted-foreground)', fontSize: 11 }} axisLine={false} tickLine={false} />
@@ -271,7 +227,7 @@ function OverviewSection() {
           </div>
         </div>
       )}
-      {revenueChart.length === 0 && !slow && !err && (
+      {stats.revenueByMonth.length === 0 && !slow && !err && (
         <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--muted-foreground)', fontFamily: 'var(--ace-font)' }}>
           No analytics data yet.
         </div>
@@ -288,8 +244,8 @@ function CoursesSection() {
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [saving, setSaving]       = useState(false);
   const [deleting, setDeleting]   = useState<string | null>(null);
-  const [confirmDelete, setConfirmDelete] = useState<AdminCourse | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const handleErr = useHandleAdminErr();
 
   function openCreate() { setEditing(null); setForm({ title: '', description: '', category: '', level: 'Intermediate', format: 'online', price: '' }); setShowModal(true); }
   function openEdit(c: AdminCourse) { setEditing(c); setForm({ title: c.title, description: c.description, category: c.category ?? '', level: c.level ?? 'Intermediate', format: c.format ?? 'online', price: c.price?.toString() ?? '' }); setShowModal(true); }
@@ -308,26 +264,30 @@ function CoursesSection() {
         setCourses(cs => [...cs, created]);
       }
       setShowModal(false);
-    } catch (e: any) { alert(e?.message ?? 'Save failed'); }
+      toast.success(editing ? 'Course updated' : 'Course created');
+    } catch (e: any) { if (!handleErr(e)) toast.error(e?.message ?? 'Save failed'); }
     finally { setSaving(false); }
   }
 
   async function togglePublish(c: AdminCourse) {
-    const updated = await adminPublishCourse(c.id, !c.published).catch(() => ({ ...c, published: !c.published }));
-    setCourses(cs => cs.map(x => x.id === c.id ? updated : x));
+    try {
+      const updated = await adminPublishCourse(c.id, !c.published);
+      setCourses(cs => cs.map(x => x.id === c.id ? updated : x));
+    } catch (e: any) {
+      if (!handleErr(e)) setCourses(cs => cs.map(x => x.id === c.id ? { ...x, published: !x.published } : x));
+    }
   }
 
   /* DELETE /api/admin/courses/{id} — removes it from the public catalog too */
-  async function remove() {
-    if (!confirmDelete) return;
-    const c = confirmDelete;
-    setConfirmDelete(null);
+  async function remove(c: AdminCourse) {
+    if (!window.confirm(`Delete "${c.title}"? This removes it from the public catalog immediately.`)) return;
     setDeleting(c.id);
     try {
       await adminDeleteCourse(c.id);
       setCourses(cs => cs.filter(x => x.id !== c.id));
+      toast.success('Course deleted');
     } catch (e: any) {
-      alert(e?.message ?? 'Delete failed');
+      if (!handleErr(e)) toast.error(e?.message ?? 'Delete failed');
     } finally {
       setDeleting(null);
     }
@@ -337,7 +297,7 @@ function CoursesSection() {
     <div>
       {slow && <ColdBanner msg="Loading courses from backend…" />}
       {err  && <ErrBanner msg={err} onRetry={reload} />}
-      <SectionHeader title="Courses" action={<Btn onClick={openCreate}><Plus size={14} /> New Course</Btn>} />
+      <SectionHeader title={`Courses (${courses.length})`} action={<Btn onClick={openCreate}><Plus size={14} /> New Course</Btn>} />
       <TblWrap>
         <thead><tr><Th>Title</Th><Th>Category</Th><Th>Level</Th><Th>Price</Th><Th>Status</Th><Th>Actions</Th></tr></thead>
         <tbody>
@@ -348,7 +308,7 @@ function CoursesSection() {
             <tr key={c.id}>
               <Td><span style={{ color: 'var(--foreground)', fontWeight: 600 }}>{c.title}</span></Td>
               <Td>{c.category}</Td><Td>{c.level}</Td>
-              <Td>{formatPrice(c.price ?? 0, c.currency)}</Td>
+              <Td>₦{(c.price ?? 0).toLocaleString()}</Td>
               <Td><Badge status={c.published ? 'published' : 'draft'} /></Td>
               <Td>
                 <div style={{ display: 'flex', gap: 6 }}>
@@ -356,7 +316,7 @@ function CoursesSection() {
                   <Btn size="sm" variant={c.published ? 'ghost' : 'outline'} onClick={() => togglePublish(c)}>
                     {c.published ? <EyeOff size={12} /> : <Eye size={12} />}
                   </Btn>
-                  <Btn size="sm" variant="danger" disabled={deleting === c.id} onClick={() => setConfirmDelete(c)}>
+                  <Btn size="sm" variant="danger" disabled={deleting === c.id} onClick={() => remove(c)}>
                     <Trash2 size={12} />
                   </Btn>
                 </div>
@@ -371,9 +331,7 @@ function CoursesSection() {
           <Field label="Description"><textarea style={{ ...inp, height: 80, resize: 'vertical' }} value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} /></Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Category"><input style={inp} value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))} /></Field>
-            {/* New courses are priced in the platform base currency (NGN); regional
-                prices are set afterward from the Prices section. */}
-            <Field label="Base Price (NGN)"><input style={inp} type="number" value={form.price} onChange={e => setForm(f => ({ ...f, price: e.target.value }))} /></Field>
+            <Field label="Price (₦)"><input style={inp} type="number" value={form.price} onChange={e => setForm(f => ({ ...f, price: e.target.value }))} /></Field>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Level">
@@ -397,129 +355,50 @@ function CoursesSection() {
           </div>
         </Modal>
       )}
-      {confirmDelete && (
-        <ConfirmModal
-          title="Delete course"
-          message={`Delete "${confirmDelete.title}"? This removes it from the public catalog immediately.`}
-          confirmLabel="Delete"
-          onConfirm={remove}
-          onCancel={() => setConfirmDelete(null)}
-        />
-      )}
     </div>
   );
 }
 
-/* Regional prices hang off a specific catalog item, so GET /admin/product-prices
-   takes (itemType, itemId) — there is no "all prices" listing. The section
-   therefore starts with an item picker and loads that item's currency rows. */
-const CURRENCIES = ['NGN', 'USD', 'GBP', 'GHS', 'KES', 'ZAR'];
-
 function PricesSection() {
-  const { data: courses } = useLive(adminGetCourses, [] as AdminCourse[]);
-  const { data: exams }   = useLive(adminGetExams,   [] as AdminExamProduct[]);
-
-  const [itemType, setItemType] = useState<ItemType>('course');
-  const [itemId, setItemId]     = useState('');
-  const [prices, setPrices]     = useState<ProductPrice[]>([]);
-  const [loading, setLoading]   = useState(false);
-  const [err, setErr]           = useState('');
-
+  const { data: prices, setData: setPrices, slow, err, reload } = useLive(adminGetPrices, [] as ProductPrice[]);
   const [editing, setEditing] = useState<string | null>(null);
   const [editVal, setEditVal] = useState('');
   const [showAdd, setShowAdd] = useState(false);
-  const [addForm, setAddForm] = useState({ currency: 'USD', amount: '' });
-  const [confirmDelete, setConfirmDelete] = useState<ProductPrice | null>(null);
-
-  const options = itemType === 'exam_product'
-    ? exams.map(e => ({ id: e.id, label: e.title }))
-    : itemType === 'course'
-      ? courses.map(c => ({ id: c.id, label: c.title }))
-      : [];
-
-  const load = useCallback(async (type: ItemType, id: string) => {
-    if (!id) { setPrices([]); return; }
-    setLoading(true); setErr('');
-    try { setPrices(await adminGetPrices(type, id)); }
-    catch (e: any) { setErr(e?.message ?? 'Could not load prices'); setPrices([]); }
-    finally { setLoading(false); }
-  }, []);
-
-  useEffect(() => { void load(itemType, itemId); }, [load, itemType, itemId]);
-
-  /* PUT is an upsert keyed on (itemType, itemId, currency) — editing an amount
-     and adding a currency are the same call. */
-  async function upsert(currency: string, amount: number) {
-    const saved = await adminUpsertPrice({ itemType, itemId, currency, amount });
-    setPrices(ps => {
-      const without = ps.filter(p => p.currency !== currency);
-      return [...without, saved];
-    });
-  }
+  const [addForm, setAddForm] = useState({ courseId: '', region: 'NG', currency: 'NGN', amount: '' });
 
   async function saveEdit(p: ProductPrice) {
-    await upsert(p.currency, Number(editVal)).catch(() => {});
-    setEditing(null);
+    const updated = await adminUpdatePrice(p.id, Number(editVal)).catch(() => ({ ...p, amount: Number(editVal) }));
+    setPrices(ps => ps.map(x => x.id === p.id ? updated : x)); setEditing(null);
   }
-  async function doDelete() {
-    if (!confirmDelete) return;
-    const id = confirmDelete.id;
-    setConfirmDelete(null);
+  async function doDelete(id: string) {
     await adminDeletePrice(id).catch(() => {}); setPrices(ps => ps.filter(p => p.id !== id));
   }
   async function addPrice() {
-    await upsert(addForm.currency, Number(addForm.amount)).catch(() => {});
-    setShowAdd(false); setAddForm({ currency: 'USD', amount: '' });
+    const created = await adminAddPrice({ ...addForm, amount: Number(addForm.amount) });
+    setPrices(ps => [...ps, created]); setShowAdd(false); setAddForm({ courseId: '', region: 'NG', currency: 'NGN', amount: '' });
   }
 
   return (
     <div>
-      {loading && <ColdBanner msg="Loading prices from backend…" />}
-      {err     && <ErrBanner msg={err} onRetry={() => load(itemType, itemId)} />}
-      <SectionHeader
-        title="Regional Prices"
-        action={<Btn onClick={() => setShowAdd(true)} disabled={!itemId}><Plus size={14} /> Add Currency</Btn>}
-      />
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3" style={{ marginBottom: 16 }}>
-        <Field label="Item Type">
-          <select style={inp} value={itemType} onChange={e => { setItemType(e.target.value as ItemType); setItemId(''); }}>
-            <option value="course">Course</option>
-            <option value="exam_product">Exam Product</option>
-            <option value="exam_voucher">Exam Voucher</option>
-          </select>
-        </Field>
-        <Field label="Item">
-          {options.length > 0 ? (
-            <select style={inp} value={itemId} onChange={e => setItemId(e.target.value)}>
-              <option value="">Select an item…</option>
-              {options.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
-            </select>
-          ) : (
-            <input style={inp} placeholder="Item UUID" value={itemId} onChange={e => setItemId(e.target.value)} />
-          )}
-        </Field>
-      </div>
-
+      {slow && <ColdBanner msg="Loading prices from backend…" />}
+      {err  && <ErrBanner msg={err} onRetry={reload} />}
+      <SectionHeader title={`Product Prices (${prices.length})`} action={<Btn onClick={() => setShowAdd(true)}><Plus size={14} /> Add Price</Btn>} />
       <TblWrap>
-        <thead><tr><Th>Currency</Th><Th>Amount</Th><Th>Was</Th><Th>Actions</Th></tr></thead>
+        <thead><tr><Th>Course ID</Th><Th>Region</Th><Th>Currency</Th><Th>Amount</Th><Th>Actions</Th></tr></thead>
         <tbody>
-          {prices.length === 0 && !loading && (
-            <tr><td colSpan={4} style={{ textAlign: 'center', padding: '32px 0', color: 'var(--muted-foreground)', fontFamily: 'var(--ace-font)', fontSize: '0.85rem' }}>
-              {itemId ? 'No regional prices — this item falls back to its NGN base price.' : 'Pick an item to see its regional prices.'}
-            </td></tr>
+          {prices.length === 0 && !slow && (
+            <tr><td colSpan={5} style={{ textAlign: 'center', padding: '32px 0', color: 'var(--muted-foreground)', fontFamily: 'var(--ace-font)', fontSize: '0.85rem' }}>No prices configured yet.</td></tr>
           )}
           {prices.map(p => (
             <tr key={p.id}>
-              <Td>{p.currency}</Td>
+              <Td>{p.courseId}</Td><Td>{p.region}</Td><Td>{p.currency}</Td>
               <Td>{editing === p.id ? <input style={{ ...inp, width: 120, display: 'inline-block' }} value={editVal} onChange={e => setEditVal(e.target.value)} autoFocus /> : p.amount.toLocaleString()}</Td>
-              <Td>{p.originalAmount != null ? formatPrice(p.originalAmount, p.currency) : '—'}</Td>
               <Td>
                 <div style={{ display: 'flex', gap: 6 }}>
                   {editing === p.id
                     ? <Btn size="sm" onClick={() => saveEdit(p)}><CheckCircle2 size={12} /></Btn>
                     : <Btn size="sm" variant="ghost" onClick={() => { setEditing(p.id); setEditVal(p.amount.toString()); }}><Edit2 size={12} /></Btn>}
-                  <Btn size="sm" variant="danger" onClick={() => setConfirmDelete(p)}><Trash2 size={12} /></Btn>
+                  <Btn size="sm" variant="danger" onClick={() => doDelete(p.id)}><Trash2 size={12} /></Btn>
                 </div>
               </Td>
             </tr>
@@ -527,27 +406,18 @@ function PricesSection() {
         </tbody>
       </TblWrap>
       {showAdd && (
-        <Modal title="Add / Update Currency Price" onClose={() => setShowAdd(false)}>
-          <Field label="Currency">
-            <select style={inp} value={addForm.currency} onChange={e => setAddForm(f => ({ ...f, currency: e.target.value }))}>
-              {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
-          </Field>
+        <Modal title="Add Price" onClose={() => setShowAdd(false)}>
+          <Field label="Course ID"><input style={inp} value={addForm.courseId} onChange={e => setAddForm(f => ({ ...f, courseId: e.target.value }))} /></Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Region"><input style={inp} value={addForm.region} onChange={e => setAddForm(f => ({ ...f, region: e.target.value }))} /></Field>
+            <Field label="Currency"><input style={inp} value={addForm.currency} onChange={e => setAddForm(f => ({ ...f, currency: e.target.value }))} /></Field>
+          </div>
           <Field label="Amount"><input style={inp} type="number" value={addForm.amount} onChange={e => setAddForm(f => ({ ...f, amount: e.target.value }))} /></Field>
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 8 }}>
             <Btn variant="ghost" onClick={() => setShowAdd(false)}>Cancel</Btn>
-            <Btn onClick={addPrice}>Save</Btn>
+            <Btn onClick={addPrice}>Add</Btn>
           </div>
         </Modal>
-      )}
-      {confirmDelete && (
-        <ConfirmModal
-          title="Delete regional price"
-          message={`Delete the ${confirmDelete.currency} price? The item falls back to its NGN base price for buyers in that region.`}
-          confirmLabel="Delete"
-          onConfirm={doDelete}
-          onCancel={() => setConfirmDelete(null)}
-        />
       )}
     </div>
   );
@@ -556,68 +426,25 @@ function PricesSection() {
 function ModulesSection() {
   const { data: courses, slow: cSlow } = useLive(adminGetCourses, [] as AdminCourse[]);
   const [selectedCourse, setSelectedCourse] = useState('');
-  const [modules, setModules] = useState<AdminModuleWithLessons[]>([]);
+  const [modules, setModules] = useState<AdminModule[]>([]);
   const [newMod, setNewMod]   = useState('');
   const [newLessons, setNewLessons] = useState<Record<string, string>>({});
   const [openMods, setOpenMods]     = useState<Set<string>>(new Set());
-  const [outlineErr, setOutlineErr] = useState('');
-  const [confirmDeleteMod, setConfirmDeleteMod]       = useState<AdminModuleWithLessons | null>(null);
-  const [confirmDeleteLesson, setConfirmDeleteLesson] = useState<{ moduleId: string; lesson: AdminLesson } | null>(null);
-
-  /* Load the saved outline when a course is picked — modules and lessons are
-     nested inside GET /admin/courses/:id. */
-  useEffect(() => {
-    if (!selectedCourse) { setModules([]); return; }
-    let cancelled = false;
-    setOutlineErr('');
-    adminGetCourseOutline(selectedCourse)
-      .then(ms => { if (!cancelled) setModules(ms); })
-      .catch((e: any) => { if (!cancelled) { setModules([]); setOutlineErr(e?.message ?? 'Could not load modules'); } });
-    return () => { cancelled = true; };
-  }, [selectedCourse]);
 
   async function addModule() {
     if (!selectedCourse || !newMod.trim()) return;
-    try {
-      const mod = await adminAddModule(selectedCourse, { title: newMod, order: modules.length });
-      setModules(ms => [...ms, { ...mod, lessons: [] }]); setNewMod('');
-    } catch (e: any) { setOutlineErr(e?.message ?? 'Could not add module'); }
+    const mod = await adminAddModule(selectedCourse, { title: newMod, order: modules.length });
+    setModules(ms => [...ms, mod]); setNewMod('');
   }
-
   async function addLesson(moduleId: string) {
     const title = newLessons[moduleId]; if (!title?.trim()) return;
-    const target = modules.find(m => m.id === moduleId);
-    try {
-      const lesson = await adminAddLesson(moduleId, { title, order: target?.lessons.length ?? 0 });
-      setModules(ms => ms.map(m => m.id === moduleId ? { ...m, lessons: [...m.lessons, lesson] } : m));
-      setNewLessons(n => ({ ...n, [moduleId]: '' }));
-    } catch (e: any) { setOutlineErr(e?.message ?? 'Could not add lesson'); }
-  }
-
-  async function doDeleteModule() {
-    if (!confirmDeleteMod) return;
-    const id = confirmDeleteMod.id;
-    setConfirmDeleteMod(null);
-    try {
-      await adminDeleteModule(id);
-      setModules(ms => ms.filter(m => m.id !== id));
-    } catch (e: any) { setOutlineErr(e?.message ?? 'Could not delete module'); }
-  }
-
-  async function doDeleteLesson() {
-    if (!confirmDeleteLesson) return;
-    const { moduleId, lesson } = confirmDeleteLesson;
-    setConfirmDeleteLesson(null);
-    try {
-      await adminDeleteLesson(lesson.id);
-      setModules(ms => ms.map(m => m.id === moduleId ? { ...m, lessons: m.lessons.filter(l => l.id !== lesson.id) } : m));
-    } catch (e: any) { setOutlineErr(e?.message ?? 'Could not delete lesson'); }
+    await adminAddLesson(moduleId, { title, type: 'video', order: 0 });
+    setNewLessons(n => ({ ...n, [moduleId]: '' }));
   }
 
   return (
     <div>
       {cSlow && <ColdBanner msg="Loading courses…" />}
-      {outlineErr && <ErrBanner msg={outlineErr} />}
       <SectionHeader title="Modules & Lessons" />
       <Field label="Select Course">
         <select style={inp} value={selectedCourse} onChange={e => setSelectedCourse(e.target.value)}>
@@ -636,32 +463,14 @@ function ModulesSection() {
             const isOpen = openMods.has(mod.id);
             return (
               <div key={mod.id} style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 10, marginBottom: 10 }}>
-                <div style={{ width: '100%', padding: '12px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
-                  <button style={{ flex: 1, minWidth: 0, background: 'none', border: 'none', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: 0, textAlign: 'left' }}
-                    onClick={() => setOpenMods(s => { const n = new Set(s); n.has(mod.id) ? n.delete(mod.id) : n.add(mod.id); return n; })}>
-                    <span style={{ color: 'var(--foreground)', fontFamily: 'var(--ace-font)', fontWeight: 600 }}>
-                      {mod.title}
-                      <span style={{ color: 'var(--muted-foreground)', fontWeight: 400, marginLeft: 8, fontSize: '0.8rem' }}>
-                        {mod.lessons.length} {mod.lessons.length === 1 ? 'lesson' : 'lessons'}
-                      </span>
-                    </span>
-                    {isOpen ? <ChevronUp size={15} style={{ color: 'var(--muted-foreground)' }} /> : <ChevronDown size={15} style={{ color: 'var(--muted-foreground)' }} />}
-                  </button>
-                  <Btn size="sm" variant="danger" onClick={() => setConfirmDeleteMod(mod)}><Trash2 size={12} /></Btn>
-                </div>
+                <button style={{ width: '100%', padding: '12px 16px', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
+                  onClick={() => setOpenMods(s => { const n = new Set(s); n.has(mod.id) ? n.delete(mod.id) : n.add(mod.id); return n; })}>
+                  <span style={{ color: 'var(--foreground)', fontFamily: 'var(--ace-font)', fontWeight: 600 }}>{mod.title}</span>
+                  {isOpen ? <ChevronUp size={15} style={{ color: 'var(--muted-foreground)' }} /> : <ChevronDown size={15} style={{ color: 'var(--muted-foreground)' }} />}
+                </button>
                 {isOpen && (
                   <div style={{ padding: '0 16px 14px' }}>
-                    {mod.lessons.map((l, li) => (
-                      <div key={l.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 0', borderTop: '1px solid var(--border)', color: 'var(--muted-foreground)', fontFamily: 'var(--ace-font)', fontSize: '0.83rem' }}>
-                        <span style={{ opacity: 0.6, minWidth: 18 }}>{li + 1}.</span>
-                        <span style={{ flex: 1 }}>{l.title}</span>
-                        <button onClick={() => setConfirmDeleteLesson({ moduleId: mod.id, lesson: l })}
-                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted-foreground)', display: 'flex', padding: 2 }}>
-                          <Trash2 size={12} />
-                        </button>
-                      </div>
-                    ))}
-                    <div style={{ display: 'flex', gap: 8, marginTop: mod.lessons.length ? 10 : 0 }}>
+                    <div style={{ display: 'flex', gap: 8 }}>
                       <input style={{ ...inp, flex: 1 }} value={newLessons[mod.id] ?? ''} onChange={e => setNewLessons(n => ({ ...n, [mod.id]: e.target.value }))} placeholder="New lesson title…" />
                       <Btn size="sm" onClick={() => addLesson(mod.id)}><Plus size={12} /> Add</Btn>
                     </div>
@@ -672,97 +481,61 @@ function ModulesSection() {
           })}
         </>
       )}
-      {confirmDeleteMod && (
-        <ConfirmModal
-          title="Delete module"
-          message={`Delete "${confirmDeleteMod.title}"? Its ${confirmDeleteMod.lessons.length} ${confirmDeleteMod.lessons.length === 1 ? 'lesson' : 'lessons'} will be removed too.`}
-          confirmLabel="Delete"
-          onConfirm={doDeleteModule}
-          onCancel={() => setConfirmDeleteMod(null)}
-        />
-      )}
-      {confirmDeleteLesson && (
-        <ConfirmModal
-          title="Delete lesson"
-          message={`Delete "${confirmDeleteLesson.lesson.title}"?`}
-          confirmLabel="Delete"
-          onConfirm={doDeleteLesson}
-          onCancel={() => setConfirmDeleteLesson(null)}
-        />
-      )}
     </div>
   );
 }
 
-/* An exam *product* is the sellable bundle; questions and attempts belong to
-   an exam *form* underneath it. Picking a product therefore loads its forms,
-   and the question bank is scoped to whichever form is selected. */
 function ExamsSection() {
   const { data: exams, setData: setExams, slow, err, reload } = useLive(adminGetExams, [] as AdminExamProduct[]);
-  const [selectedProduct, setSelectedProduct] = useState('');
-  const [forms, setForms]               = useState<ExamForm[]>([]);
-  const [selectedForm, setSelectedForm]  = useState('');
+  const [selectedExam, setSelectedExam] = useState('');
   const [questions, setQuestions]       = useState<AdminQuestion[]>([]);
   const [showCreate, setShowCreate]     = useState(false);
   const [showImport, setShowImport]     = useState(false);
-  const [showAddForm, setShowAddForm]   = useState(false);
   const [newExam, setNewExam]           = useState({ title: '', questions: '', duration: '', price: '' });
-  const [newForm, setNewForm]           = useState({ title: '', durationMinutes: '90', isFreeDemo: false });
   const [csvText, setCsvText]           = useState('');
   const [newQ, setNewQ]                 = useState({ text: '', options: ['','','',''], correctIndex: 0 });
+  const handleErr = useHandleAdminErr();
 
   async function createExam() {
-    const e = await adminCreateExam({ title: newExam.title, questions: Number(newExam.questions), duration: Number(newExam.duration), price: Number(newExam.price) });
-    setExams(es => [...es, e]); setShowCreate(false); setNewExam({ title: '', questions: '', duration: '', price: '' });
+    try {
+      const e = await adminCreateExam({ title: newExam.title, questions: Number(newExam.questions), duration: Number(newExam.duration), price: Number(newExam.price) });
+      setExams(es => [...es, e]); setShowCreate(false); setNewExam({ title: '', questions: '', duration: '', price: '' });
+      toast.success('Exam created');
+    } catch (e: any) { if (!handleErr(e)) toast.error(e?.message ?? 'Create failed'); }
   }
   async function togglePublishExam(ex: AdminExamProduct) {
-    const updated = await adminPublishExam(ex.id, !ex.published).catch(() => ({ ...ex, published: !ex.published }));
-    setExams(es => es.map(e => e.id === ex.id ? updated : e));
+    try {
+      const updated = await adminPublishExam(ex.id, !ex.published);
+      setExams(es => es.map(e => e.id === ex.id ? updated : e));
+    } catch (e: any) {
+      if (!handleErr(e)) setExams(es => es.map(e => e.id === ex.id ? { ...e, published: !e.published } : e));
+    }
   }
-
-  /* GET /admin/exam-products/:id → { …product, exams, topics } */
-  async function loadForms(productId: string) {
-    setSelectedProduct(productId); setSelectedForm(''); setQuestions([]);
-    const detail = await adminGetExamProduct(productId).catch(() => null);
-    const list = detail?.exams ?? [];
-    setForms(list);
-    if (list.length === 1) void selectForm(list[0].id);
+  async function loadQuestions(examId: string) {
+    setSelectedExam(examId); adminGetQuestions(examId).then(setQuestions).catch(() => setQuestions([]));
   }
-
-  async function selectForm(formId: string) {
-    setSelectedForm(formId);
-    adminGetQuestions(formId).then(setQuestions).catch(() => setQuestions([]));
-  }
-
-  async function addForm() {
-    if (!selectedProduct || !newForm.title.trim()) return;
-    const f = await adminAddExamForm(selectedProduct, {
-      title: newForm.title,
-      durationMinutes: Number(newForm.durationMinutes) || 90,
-      isFreeDemo: newForm.isFreeDemo,
-      isPublished: true,
-    });
-    setForms(fs => [...fs, f]); setShowAddForm(false); setNewForm({ title: '', durationMinutes: '90', isFreeDemo: false });
-    void selectForm(f.id);
-  }
-
   async function addQuestion() {
-    if (!selectedForm || !newQ.text.trim()) return;
-    const q = await adminCreateQuestion({ examId: selectedForm, text: newQ.text, options: newQ.options, correctIndex: newQ.correctIndex });
-    setQuestions(qs => [...qs, q]); setNewQ({ text: '', options: ['','','',''], correctIndex: 0 });
+    if (!selectedExam || !newQ.text.trim()) return;
+    try {
+      const q = await adminCreateQuestion({ examId: selectedExam, text: newQ.text, options: newQ.options, correctIndex: newQ.correctIndex });
+      setQuestions(qs => [...qs, q]); setNewQ({ text: '', options: ['','','',''], correctIndex: 0 });
+    } catch (e: any) { if (!handleErr(e)) toast.error(e?.message ?? 'Failed to add question'); }
   }
   async function importCsv() {
-    if (!selectedForm) return;
-    const r = await adminImportQuestions(selectedForm, csvText).catch(() => ({ imported: 0 }));
-    alert(`Imported ${r.imported} questions`); setShowImport(false); setCsvText('');
-    adminGetQuestions(selectedForm).then(setQuestions).catch(() => {});
+    if (!selectedExam) return;
+    try {
+      const r = await adminImportQuestions(selectedExam, csvText);
+      toast.success(`Imported ${r.imported} questions`);
+      setShowImport(false); setCsvText('');
+      adminGetQuestions(selectedExam).then(setQuestions).catch(() => {});
+    } catch (e: any) { if (!handleErr(e)) toast.error(e?.message ?? 'Import failed'); }
   }
 
   return (
     <div>
       {slow && <ColdBanner msg="Loading exams from backend…" />}
       {err  && <ErrBanner msg={err} onRetry={reload} />}
-      <SectionHeader title="Exam Products" action={<Btn onClick={() => setShowCreate(true)}><Plus size={14} /> New Exam</Btn>} />
+      <SectionHeader title={`Exams (${exams.length})`} action={<Btn onClick={() => setShowCreate(true)}><Plus size={14} /> New Exam</Btn>} />
       <TblWrap>
         <thead><tr><Th>Title</Th><Th>Questions</Th><Th>Duration</Th><Th>Price</Th><Th>Status</Th><Th>Actions</Th></tr></thead>
         <tbody>
@@ -772,11 +545,11 @@ function ExamsSection() {
           {exams.map(ex => (
             <tr key={ex.id}>
               <Td><span style={{ color: 'var(--foreground)', fontWeight: 600 }}>{ex.title}</span></Td>
-              <Td>{ex.questions}</Td><Td>{ex.duration} min</Td><Td>{formatPrice(ex.price, ex.currency)}</Td>
+              <Td>{ex.questions}</Td><Td>{ex.duration} min</Td><Td>₦{ex.price.toLocaleString()}</Td>
               <Td><Badge status={ex.published ? 'published' : 'draft'} /></Td>
               <Td>
                 <div style={{ display: 'flex', gap: 6 }}>
-                  <Btn size="sm" variant="ghost" onClick={() => loadForms(ex.id)}>Exam Forms</Btn>
+                  <Btn size="sm" variant="ghost" onClick={() => loadQuestions(ex.id)}>Questions</Btn>
                   <Btn size="sm" variant={ex.published ? 'danger' : 'outline'} onClick={() => togglePublishExam(ex)}>
                     {ex.published ? <EyeOff size={12} /> : <Eye size={12} />}
                   </Btn>
@@ -787,32 +560,10 @@ function ExamsSection() {
         </tbody>
       </TblWrap>
 
-      {selectedProduct && (
+      {selectedExam && (
         <div style={{ marginTop: 28 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-            <h3 style={{ color: 'var(--foreground)', fontFamily: 'var(--ace-font)', fontWeight: 700 }}>Exam Forms</h3>
-            <Btn size="sm" variant="ghost" onClick={() => setShowAddForm(true)}><Plus size={12} /> New Form</Btn>
-          </div>
-          {forms.length === 0 ? (
-            <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 12, padding: 18, color: 'var(--muted-foreground)', fontFamily: 'var(--ace-font)', fontSize: '0.85rem' }}>
-              This product has no exam forms yet. Add one before importing questions — attempts are started against a form.
-            </div>
-          ) : (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-              {forms.map(f => (
-                <Btn key={f.id} size="sm" variant={selectedForm === f.id ? undefined : 'ghost'} onClick={() => selectForm(f.id)}>
-                  {f.title}{f.isFreeDemo ? ' · free demo' : ''}
-                </Btn>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {selectedForm && (
-        <div style={{ marginTop: 28 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-            <h3 style={{ color: 'var(--foreground)', fontFamily: 'var(--ace-font)', fontWeight: 700 }}>Question Bank</h3>
+            <h3 style={{ color: 'var(--foreground)', fontFamily: 'var(--ace-font)', fontWeight: 700 }}>Question Bank ({questions.length})</h3>
             <Btn size="sm" variant="ghost" onClick={() => setShowImport(true)}><Upload size={12} /> CSV Import</Btn>
           </div>
           <div style={{ background: 'var(--card)', border: '1px solid var(--border)', borderRadius: 12, padding: 18, marginBottom: 14 }}>
@@ -852,9 +603,7 @@ function ExamsSection() {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <Field label="Questions"><input style={inp} type="number" value={newExam.questions} onChange={e => setNewExam(f => ({ ...f, questions: e.target.value }))} /></Field>
             <Field label="Duration (min)"><input style={inp} type="number" value={newExam.duration} onChange={e => setNewExam(f => ({ ...f, duration: e.target.value }))} /></Field>
-            {/* New products are priced in the platform base currency (NGN); regional
-                prices are set afterward from the Prices section. */}
-            <Field label="Base Price (NGN)"><input style={inp} type="number" value={newExam.price} onChange={e => setNewExam(f => ({ ...f, price: e.target.value }))} /></Field>
+            <Field label="Price (₦)"><input style={inp} type="number" value={newExam.price} onChange={e => setNewExam(f => ({ ...f, price: e.target.value }))} /></Field>
           </div>
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 8 }}>
             <Btn variant="ghost" onClick={() => setShowCreate(false)}>Cancel</Btn>
@@ -862,26 +611,12 @@ function ExamsSection() {
           </div>
         </Modal>
       )}
-      {showAddForm && (
-        <Modal title="New Exam Form" onClose={() => setShowAddForm(false)}>
-          <Field label="Title"><input style={inp} value={newForm.title} onChange={e => setNewForm(f => ({ ...f, title: e.target.value }))} placeholder="Practice Test 1" /></Field>
-          <Field label="Duration (min)"><input style={inp} type="number" value={newForm.durationMinutes} onChange={e => setNewForm(f => ({ ...f, durationMinutes: e.target.value }))} /></Field>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--muted-foreground)', fontFamily: 'var(--ace-font)', fontSize: '0.82rem', marginBottom: 8 }}>
-            <input type="checkbox" checked={newForm.isFreeDemo} onChange={e => setNewForm(f => ({ ...f, isFreeDemo: e.target.checked }))} />
-            Free demo — this is the form "Try Free" starts on the public site
-          </label>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 8 }}>
-            <Btn variant="ghost" onClick={() => setShowAddForm(false)}>Cancel</Btn>
-            <Btn onClick={addForm}>Create</Btn>
-          </div>
-        </Modal>
-      )}
       {showImport && (
         <Modal title="Import Questions (CSV)" onClose={() => setShowImport(false)}>
           <p style={{ color: 'var(--muted-foreground)', fontSize: '0.8rem', fontFamily: 'var(--ace-font)', marginBottom: 12 }}>
-            Header row required. Columns: <code style={{ background: 'var(--muted)', padding: '1px 6px', borderRadius: 4 }}>text, explanation, topic, difficulty, optionA, optionB, optionC, optionD, correct</code> — where <code>correct</code> is the letter (A–D) or 1-based index.
+            Format: <code style={{ background: 'var(--muted)', padding: '1px 6px', borderRadius: 4 }}>question,opt1,opt2,opt3,opt4,correctIndex</code>
           </p>
-          <Field label="CSV Content"><textarea style={{ ...inp, height: 160, resize: 'vertical' }} value={csvText} onChange={e => setCsvText(e.target.value)} placeholder={"text,explanation,topic,difficulty,optionA,optionB,optionC,optionD,correct\nHow many bits in a byte?,A byte is 8 bits.,Fundamentals,Beginner,4,8,16,32,B"} /></Field>
+          <Field label="CSV Content"><textarea style={{ ...inp, height: 160, resize: 'vertical' }} value={csvText} onChange={e => setCsvText(e.target.value)} placeholder={"How many bits in a byte?,4,8,16,32,1"} /></Field>
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 8 }}>
             <Btn variant="ghost" onClick={() => setShowImport(false)}>Cancel</Btn>
             <Btn onClick={importCsv}><Upload size={13} /> Import</Btn>
@@ -894,10 +629,7 @@ function ExamsSection() {
 
 /* GET /api/admin/users — platform analytics: accounts, roles, growth */
 function UsersSection() {
-  const [page, setPage] = useState(1);
-  const EMPTY = { users: [] as AdminUser[], total: 0, totalPages: 1 };
-  const { data, slow, err, reload } = useLive(() => adminGetUsers(page), EMPTY, [page]);
-  const { users, total, totalPages } = data;
+  const { data: users, slow, err, reload } = useLive(() => adminGetUsers(), [] as AdminUser[]);
 
   const admins   = users.filter(u => u.role === 'admin').length;
   const students = users.length - admins;
@@ -908,12 +640,12 @@ function UsersSection() {
       {err  && <ErrBanner msg={err} onRetry={reload} />}
 
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
-        <StatCard icon={<Users size={22} />}   label="Total Accounts" value={total.toLocaleString()}    color="var(--ace-brand)" />
-        <StatCard icon={<BookOpen size={22} />} label="Students (page)" value={students.toLocaleString()} color="#a78bfa" />
-        <StatCard icon={<UserCog size={22} />}  label="Admins (page)"   value={admins.toLocaleString()}   color="#fb923c" />
+        <StatCard icon={<Users size={22} />}   label="Total Accounts" value={users.length.toLocaleString()} color="var(--ace-brand)" />
+        <StatCard icon={<BookOpen size={22} />} label="Students"      value={students.toLocaleString()}     color="#a78bfa" />
+        <StatCard icon={<UserCog size={22} />}  label="Admins"        value={admins.toLocaleString()}       color="#fb923c" />
       </div>
 
-      <SectionHeader title="Users" action={<Btn variant="ghost" size="sm" onClick={reload}><RefreshCw size={12} /> Refresh</Btn>} />
+      <SectionHeader title={`Users (${users.length})`} action={<Btn variant="ghost" size="sm" onClick={reload}><RefreshCw size={12} /> Refresh</Btn>} />
       <TblWrap>
         <thead><tr><Th>Name</Th><Th>Email</Th><Th>Role</Th><Th>Joined</Th></tr></thead>
         <tbody>
@@ -924,13 +656,12 @@ function UsersSection() {
             <tr key={u.id}>
               <Td><span style={{ color: 'var(--foreground)', fontWeight: 600 }}>{u.fullName ?? u.name ?? '—'}</span></Td>
               <Td>{u.email}</Td>
-              <Td><RoleBadge role={u.role} /></Td>
+              <Td><Badge status={u.role === 'admin' ? 'published' : 'pending'} /></Td>
               <Td>{u.createdAt ? new Date(u.createdAt).toLocaleDateString() : '—'}</Td>
             </tr>
           ))}
         </tbody>
       </TblWrap>
-      <Pager page={page} totalPages={totalPages} onChange={setPage} />
     </div>
   );
 }
@@ -938,15 +669,8 @@ function UsersSection() {
 function OrdersSection() {
   const { data, slow, err, reload } = useLive(() => adminGetOrdersList(), [] as AdminOrder[]);
 
-  /* Orders can be in different currencies (geo-priced) — grouping by currency
-     rather than summing keeps a mixed batch from producing a meaningless
-     total. */
-  const revenueByCurrency = data.reduce<Record<string, number>>((acc, o) => {
-    const c = o.currency ?? 'NGN';
-    acc[c] = (acc[c] ?? 0) + (o.total ?? 0);
-    return acc;
-  }, {});
-  const paid = data.filter(o => ['completed', 'success', 'paid'].includes((o.status ?? '').toLowerCase())).length;
+  const revenue = data.reduce((sum, o) => sum + (o.total ?? 0), 0);
+  const paid    = data.filter(o => ['completed', 'success', 'paid'].includes((o.status ?? '').toLowerCase())).length;
 
   return (
     <div>
@@ -956,12 +680,10 @@ function OrdersSection() {
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
         <StatCard icon={<ShoppingCart size={22} />} label="Total Orders" value={data.length.toLocaleString()}     color="var(--ace-brand)" />
         <StatCard icon={<CheckCircle2 size={22} />} label="Paid Orders"  value={paid.toLocaleString()}            color="#22c55e" />
-        <StatCard icon={<DollarSign size={22} />}   label="Gross Value"
-          value={Object.entries(revenueByCurrency).map(([c, v]) => formatPrice(v, c)).join(' · ') || formatPrice(0, 'NGN')}
-          color="#fb923c" />
+        <StatCard icon={<DollarSign size={22} />}   label="Gross Value"  value={`₦${revenue.toLocaleString()}`}   color="#fb923c" />
       </div>
 
-      <SectionHeader title="Orders" action={<Btn variant="ghost" size="sm" onClick={reload}><RefreshCw size={12} /> Refresh</Btn>} />
+      <SectionHeader title={`Orders (${data.length})`} action={<Btn variant="ghost" size="sm" onClick={reload}><RefreshCw size={12} /> Refresh</Btn>} />
       <TblWrap>
         <thead><tr><Th>Order ID</Th><Th>User</Th><Th>Total</Th><Th>Status</Th><Th>Date</Th></tr></thead>
         <tbody>
@@ -969,7 +691,7 @@ function OrdersSection() {
           {data.map(o => (
             <tr key={o.id}>
               <Td><span style={{ fontFamily: 'monospace', fontSize: '0.78rem' }}>{o.id}</span></Td>
-              <Td>{o.userId}</Td><Td>{formatPrice(o.total, o.currency)}</Td>
+              <Td>{o.userId}</Td><Td>₦{o.total.toLocaleString()}</Td>
               <Td><Badge status={o.status} /></Td><Td>{o.createdAt}</Td>
             </tr>
           ))}
@@ -985,7 +707,7 @@ function PaymentsSection() {
     <div>
       {slow && <ColdBanner msg="Loading payments from backend…" />}
       {err  && <ErrBanner msg={err} onRetry={reload} />}
-      <SectionHeader title="Payments" />
+      <SectionHeader title={`Payments (${data.length})`} />
       <TblWrap>
         <thead><tr><Th>ID</Th><Th>Order</Th><Th>Amount</Th><Th>Method</Th><Th>Status</Th><Th>Date</Th></tr></thead>
         <tbody>
@@ -994,7 +716,7 @@ function PaymentsSection() {
             <tr key={p.id}>
               <Td><span style={{ fontFamily: 'monospace', fontSize: '0.78rem' }}>{p.id}</span></Td>
               <Td><span style={{ fontFamily: 'monospace', fontSize: '0.78rem' }}>{p.orderId}</span></Td>
-              <Td>{formatPrice(p.amount, p.currency)}</Td><Td>{p.method}</Td>
+              <Td>₦{p.amount.toLocaleString()}</Td><Td>{p.method}</Td>
               <Td><Badge status={p.status} /></Td><Td>{p.createdAt}</Td>
             </tr>
           ))}
@@ -1004,44 +726,21 @@ function PaymentsSection() {
   );
 }
 
-/* Mirrors the backend's LeadStatus enum. */
-const LEAD_STATUSES = ['new', 'in_review', 'contacted', 'accepted', 'rejected', 'archived'];
-
 function LeadsSection() {
-  const { data, setData, slow, err, reload } = useLive(() => adminGetLeads().then(r => r.leads), [] as AdminLead[]);
-
-  /* PATCH /admin/leads/:id — optimistic; the row reverts on failure. */
-  async function setStatus(lead: AdminLead, status: string) {
-    const previous = lead.status;
-    setData(ls => ls.map(l => l.id === lead.id ? { ...l, status } : l));
-    await adminUpdateLeadStatus(lead.id, status).catch(() => {
-      setData(ls => ls.map(l => l.id === lead.id ? { ...l, status: previous } : l));
-    });
-  }
-
+  const { data, slow, err, reload } = useLive(() => adminGetLeads().then(r => r.leads), [] as AdminLead[]);
   return (
     <div>
       {slow && <ColdBanner msg="Loading leads from backend…" />}
       {err  && <ErrBanner msg={err} onRetry={reload} />}
-      <SectionHeader title="Leads" />
+      <SectionHeader title={`Leads (${data.length})`} />
       <TblWrap>
-        <thead><tr><Th>Name</Th><Th>Email</Th><Th>Phone</Th><Th>Type</Th><Th>Status</Th><Th>Date</Th></tr></thead>
+        <thead><tr><Th>Name</Th><Th>Email</Th><Th>Phone</Th><Th>Source</Th><Th>Date</Th></tr></thead>
         <tbody>
-          {data.length === 0 && !slow && <tr><td colSpan={6} style={{ textAlign: 'center', padding: '32px 0', color: 'var(--muted-foreground)', fontFamily: 'var(--ace-font)', fontSize: '0.85rem' }}>No leads yet.</td></tr>}
+          {data.length === 0 && !slow && <tr><td colSpan={5} style={{ textAlign: 'center', padding: '32px 0', color: 'var(--muted-foreground)', fontFamily: 'var(--ace-font)', fontSize: '0.85rem' }}>No leads yet.</td></tr>}
           {data.map(l => (
             <tr key={l.id}>
               <Td><span style={{ color: 'var(--foreground)', fontWeight: 600 }}>{l.name}</span></Td>
-              <Td>{l.email}</Td><Td>{l.phone ?? '—'}</Td><Td>{l.type ?? l.source ?? '—'}</Td>
-              <Td>
-                <select
-                  style={{ ...inp, width: 130, padding: '5px 8px', fontSize: '0.78rem' }}
-                  value={l.status ?? 'new'}
-                  onChange={e => setStatus(l, e.target.value)}
-                >
-                  {LEAD_STATUSES.map(s => <option key={s} value={s}>{s.replace('_', ' ')}</option>)}
-                </select>
-              </Td>
-              <Td>{l.createdAt}</Td>
+              <Td>{l.email}</Td><Td>{l.phone ?? '—'}</Td><Td>{l.source ?? '—'}</Td><Td>{l.createdAt}</Td>
             </tr>
           ))}
         </tbody>
@@ -1056,7 +755,7 @@ function AuditSection() {
     <div>
       {slow && <ColdBanner msg="Loading audit logs from backend…" />}
       {err  && <ErrBanner msg={err} onRetry={reload} />}
-      <SectionHeader title="Audit Logs" />
+      <SectionHeader title={`Audit Logs (${data.length})`} />
       <TblWrap>
         <thead><tr><Th>Time</Th><Th>User</Th><Th>Action</Th><Th>Resource</Th></tr></thead>
         <tbody>
@@ -1132,7 +831,7 @@ export default function AdminDashboard() {
         width: 232, flexShrink: 0, background: 'var(--card)', borderRight: '1px solid var(--border)',
         display: 'flex', flexDirection: 'column', position: 'fixed', top: 0, left: 0, bottom: 0, zIndex: 110,
         transform: sideOpen ? 'translateX(0)' : 'translateX(-100%)', transition: 'transform 0.25s',
-      }} className="lg:[transform:translateX(0)]!">
+      }} className="lg:!translate-x-0">
         <div style={{ padding: '20px 18px 14px', display: 'flex', alignItems: 'center', gap: 10, borderBottom: '1px solid var(--border)' }}>
           <div style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--ace-brand)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <LayoutDashboard size={15} color="var(--primary-foreground)" />

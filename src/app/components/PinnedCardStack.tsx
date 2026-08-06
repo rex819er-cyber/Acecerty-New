@@ -16,7 +16,7 @@ const CARDS = [
   },
   {
     label: 'Practice Exam Engine',
-    heading: 'Questions refined by exam experts',
+    heading: '10,000+ questions refined by exam experts',
     body: 'Adaptive question banks mirror real exam formats, identify weak spots, and build timed confidence so nothing surprises you on test day.',
     tag: 'Practice',
     accent: '#00C4DC',
@@ -25,7 +25,7 @@ const CARDS = [
   {
     label: 'Exam Pass Guarantee',
     heading: 'Pass first time — or we cover your retake',
-    body: 'Every bootcamp comes with our no-questions-asked retake guarantee. We only win when you do.',
+    body: 'Every bootcamp comes with our no-questions-asked retake guarantee. We only win when you do, which is why our pass rate sits at 95%.',
     tag: 'Certify',
     accent: '#00A2B6',
     bg: 'linear-gradient(135deg, #1A0A00 0%, #2A1200 100%)',

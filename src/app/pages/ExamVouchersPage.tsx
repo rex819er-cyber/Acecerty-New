@@ -1,10 +1,8 @@
 import React, { useState } from 'react';
-import { Ticket, ShieldCheck, Zap, Star, ChevronDown, ChevronUp, Search, Wifi, AlertCircle } from 'lucide-react';
+import { Ticket, ShieldCheck, Zap, Star, ChevronDown, ChevronUp, Search } from 'lucide-react';
 import { useCart } from '../context/CartContext';
-import { useApi, apiGetExamVouchers, apiAddToCart, minorToMajor, formatPrice } from '../lib/api';
-import type { ExamVoucher } from '../lib/api';
 
-type Vendor = string;
+type Vendor = 'All' | 'CompTIA' | 'Microsoft' | 'Cisco' | 'ISC2' | 'ISACA' | 'AWS' | 'PMI';
 
 interface Voucher {
   id: string;
@@ -13,28 +11,31 @@ interface Voucher {
   examCode: string;
   price: number;
   originalPrice: number;
-  currency: string;
   badge?: string;
   popular?: boolean;
   color: string;
 }
 
-/* GET /api/exam-vouchers returns the ExamVoucher entity: vendor / examName /
-   examCode with money in minor units. Flattened onto the card's shape here. */
-function fromApi(v: ExamVoucher): Voucher {
-  return {
-    id: v.id,
-    vendor: v.vendor,
-    exam: v.examName,
-    examCode: v.examCode,
-    price: minorToMajor(v.priceMinor),
-    originalPrice: v.originalPriceMinor != null ? minorToMajor(v.originalPriceMinor) : minorToMajor(v.priceMinor),
-    currency: v.currency,
-    badge: v.badge ?? undefined,
-    popular: v.popular,
-    color: v.color || '#00A2B6',
-  };
-}
+const VOUCHERS: Voucher[] = [
+  { id: 'v1', vendor: 'CompTIA', exam: 'Security+', examCode: 'SY0-701', price: 370, originalPrice: 404, popular: true, badge: 'Best Seller', color: '#c0392b' },
+  { id: 'v2', vendor: 'CompTIA', exam: 'Network+', examCode: 'N10-009', price: 329, originalPrice: 369, color: '#c0392b' },
+  { id: 'v3', vendor: 'CompTIA', exam: 'A+', examCode: 'Core 1 + Core 2', price: 460, originalPrice: 508, color: '#c0392b' },
+  { id: 'v4', vendor: 'CompTIA', exam: 'CySA+', examCode: 'CS0-003', price: 370, originalPrice: 404, color: '#c0392b' },
+  { id: 'v5', vendor: 'Microsoft', exam: 'Azure Administrator', examCode: 'AZ-104', price: 165, originalPrice: 185, popular: true, color: '#0078d4' },
+  { id: 'v6', vendor: 'Microsoft', exam: 'Azure Fundamentals', examCode: 'AZ-900', price: 165, originalPrice: 185, color: '#0078d4' },
+  { id: 'v7', vendor: 'Microsoft', exam: 'Security, Compliance & Identity', examCode: 'SC-900', price: 165, originalPrice: 185, color: '#0078d4' },
+  { id: 'v8', vendor: 'Cisco', exam: 'CCNA', examCode: '200-301', price: 330, originalPrice: 395, popular: true, badge: 'Hot', color: '#1ba0d8' },
+  { id: 'v9', vendor: 'Cisco', exam: 'CCNP Enterprise', examCode: '350-401', price: 400, originalPrice: 450, color: '#1ba0d8' },
+  { id: 'v10', vendor: 'ISC2', exam: 'CISSP', examCode: 'CISSP', price: 699, originalPrice: 749, popular: true, badge: 'Gold Standard', color: '#005f6b' },
+  { id: 'v11', vendor: 'ISC2', exam: 'CCSP', examCode: 'CCSP', price: 599, originalPrice: 649, color: '#005f6b' },
+  { id: 'v12', vendor: 'ISACA', exam: 'CISM', examCode: 'CISM', price: 575, originalPrice: 625, color: '#4a4a8a' },
+  { id: 'v13', vendor: 'ISACA', exam: 'CISA', examCode: 'CISA', price: 575, originalPrice: 625, color: '#4a4a8a' },
+  { id: 'v14', vendor: 'AWS', exam: 'Solutions Architect Associate', examCode: 'SAA-C03', price: 150, originalPrice: 175, popular: true, color: '#ff9900' },
+  { id: 'v15', vendor: 'AWS', exam: 'Cloud Practitioner', examCode: 'CLF-C02', price: 100, originalPrice: 125, color: '#ff9900' },
+  { id: 'v16', vendor: 'PMI', exam: 'PMP', examCode: 'PMP', price: 555, originalPrice: 605, badge: 'PMI Member Rate', color: '#2c5282' },
+];
+
+const VENDORS: Vendor[] = ['All', 'CompTIA', 'Microsoft', 'Cisco', 'ISC2', 'ISACA', 'AWS', 'PMI'];
 
 const VENDOR_LOGO: Record<string, string> = {
   CompTIA: 'CT',
@@ -46,10 +47,6 @@ const VENDOR_LOGO: Record<string, string> = {
   PMI: 'PMI',
 };
 
-/** Two- to three-letter mark for a vendor the logo map doesn't know about. */
-const vendorMark = (vendor: string) =>
-  VENDOR_LOGO[vendor] ?? vendor.replace(/[^A-Za-z0-9]/g, '').slice(0, 3).toUpperCase();
-
 function VoucherCard({ voucher }: { voucher: Voucher }) {
   const { addToCart } = useCart();
 
@@ -59,18 +56,14 @@ function VoucherCard({ voucher }: { voucher: Voucher }) {
     shortTitle: voucher.examCode,
     description: `Official ${voucher.vendor} exam voucher for ${voucher.exam} (${voucher.examCode})`,
     category: voucher.vendor as any,
-    price: voucher.price,
-    originalPrice: voucher.originalPrice,
-    currency: voucher.currency,
+    price: 60000,
+    originalPrice: 60000,
     duration: 'Voucher',
-    delivery: 'Emailed voucher code',
     level: 'All Levels' as any,
     type: 'online' as any,
     gradient: '',
     image: undefined,
     videos: undefined,
-    /* Tells the checkout which backend catalog this id belongs to. */
-    itemType: 'exam_voucher' as const,
   };
 
   return (
@@ -86,7 +79,7 @@ function VoucherCard({ voucher }: { voucher: Voucher }) {
             className="h-10 w-14 rounded-lg flex items-center justify-center text-white text-xs font-black"
             style={{ backgroundColor: voucher.color }}
           >
-            {vendorMark(voucher.vendor)}
+            {VENDOR_LOGO[voucher.vendor]}
           </div>
 
           <div className="flex flex-col items-end gap-1">
@@ -112,22 +105,12 @@ function VoucherCard({ voucher }: { voucher: Voucher }) {
         <div className="mt-auto">
           <div className="flex items-baseline gap-2 mb-4">
             <span style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--ace-brand)' }}>
-              {formatPrice(voucher.price, voucher.currency)}
+              ₦60,000
             </span>
-            {voucher.originalPrice > voucher.price && (
-              <span className="text-xs line-through text-muted-foreground">
-                {formatPrice(voucher.originalPrice, voucher.currency)}
-              </span>
-            )}
           </div>
 
           <button
-            onClick={() => {
-              addToCart(courseForCart);
-              /* Keeps the signed-in user's server-side cart in step; a no-op
-                 (rejected and swallowed) for signed-out visitors. */
-              apiAddToCart('exam_voucher', voucher.id).catch(() => {});
-            }}
+            onClick={() => addToCart(courseForCart)}
             className="w-full py-3 rounded-xl text-sm font-semibold text-white flex items-center justify-center gap-2 transition-all active:scale-[0.97] hover:opacity-90"
             style={{ backgroundColor: 'var(--ace-brand)' }}
           >
@@ -143,18 +126,7 @@ export default function ExamVouchersPage() {
   const [activeVendor, setActiveVendor] = useState<Vendor>('All');
   const [query, setQuery] = useState('');
 
-  /* GET /api/exam-vouchers — filtering stays client-side so the vendor tabs and
-     search box respond instantly once the catalog is in hand. */
-  const { data, loading, error, slowConnection } = useApi(
-    () => apiGetExamVouchers({ limit: 100 }),
-    [],
-  );
-
-  const vouchers: Voucher[] = (data ?? []).map(fromApi);
-
-  const VENDORS: Vendor[] = ['All', ...Array.from(new Set(vouchers.map((v) => v.vendor))).sort()];
-
-  const filtered = vouchers.filter((v) => {
+  const filtered = VOUCHERS.filter((v) => {
     const matchVendor = activeVendor === 'All' || v.vendor === activeVendor;
     const matchQuery = !query || v.exam.toLowerCase().includes(query.toLowerCase()) || v.examCode.toLowerCase().includes(query.toLowerCase()) || v.vendor.toLowerCase().includes(query.toLowerCase());
     return matchVendor && matchQuery;
@@ -173,7 +145,7 @@ export default function ExamVouchersPage() {
             Discounted Exam Vouchers
           </h1>
           <p className="text-white/60 mb-8" style={{ fontSize: '1.05rem', maxWidth: 520 }}>
-            Buy official exam vouchers at exclusive Acecerty prices.
+            Buy official exam vouchers at exclusive Acecerty prices — save up to 20% on top certifications.
           </p>
 
           {/* Trust badges */}
@@ -206,19 +178,6 @@ export default function ExamVouchersPage() {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {slowConnection && loading && (
-          <div className="flex items-center gap-2 mb-6 px-4 py-3 rounded-xl text-sm"
-            style={{ background: 'var(--ace-brand-light)', color: 'var(--ace-brand)' }}>
-            <Wifi className="h-4 w-4 animate-pulse shrink-0" /> Loading the voucher catalog…
-          </div>
-        )}
-        {error && (
-          <div className="flex items-center gap-2 mb-6 px-4 py-3 rounded-xl text-sm"
-            style={{ background: 'var(--muted)', color: 'var(--destructive)' }}>
-            <AlertCircle className="h-4 w-4 shrink-0" /> Could not load the voucher catalog: {error}
-          </div>
-        )}
-
         {/* Vendor filter tabs */}
         <div className="flex flex-wrap gap-2 mb-8">
           {VENDORS.map((v) => (
@@ -238,18 +197,10 @@ export default function ExamVouchersPage() {
           <span className="ml-auto self-center text-sm text-muted-foreground">{filtered.length} vouchers</span>
         </div>
 
-        {loading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-            {Array.from({ length: 8 }).map((_, i) => (
-              <div key={i} className="rounded-2xl h-64 animate-pulse" style={{ backgroundColor: 'var(--muted)' }} />
-            ))}
-          </div>
-        ) : filtered.length === 0 ? (
+        {filtered.length === 0 ? (
           <div className="text-center py-24">
             <Ticket className="h-12 w-12 mx-auto mb-4 text-border" />
-            <p className="font-medium text-muted-foreground">
-              {vouchers.length === 0 ? 'No vouchers have been published yet' : 'No vouchers match your search'}
-            </p>
+            <p className="font-medium text-muted-foreground">No vouchers found</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">

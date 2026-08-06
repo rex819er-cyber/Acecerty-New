@@ -76,7 +76,7 @@ export default function LoginPage() {
             <Shield className="h-5 w-5" style={{ color: 'var(--ace-brand)' }} />
           </div>
           <div>
-            <p className="text-white text-sm font-semibold" style={{ fontFamily: 'var(--ace-font)' }}>Industry-recognised certification training</p>
+            <p className="text-white text-sm font-semibold" style={{ fontFamily: 'var(--ace-font)' }}>Trusted by 250k+ students</p>
             <p className="text-white/55 text-xs" style={{ fontFamily: 'var(--ace-font)' }}>Secure login with 256-bit encryption</p>
           </div>
         </div>

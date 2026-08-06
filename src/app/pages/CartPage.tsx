@@ -1,17 +1,20 @@
-import React from 'react';
-import { Trash2, ShoppingBag, ArrowRight, Plus, Minus, Lock } from 'lucide-react';
+import React, { useState } from 'react';
+import { Trash2, ShoppingBag, ArrowRight, Plus, Minus, Tag, CheckCircle, Lock } from 'lucide-react';
 import { Link } from 'react-router';
 import { useCart } from '../context/CartContext';
 import { ImageWithFallback } from '../components/figma/ImageWithFallback';
-import { formatPrice } from '../lib/api';
 
 export default function CartPage() {
   const { items, removeFromCart, updateQuantity, clearCart, subtotal } = useCart();
-  /* Every course in the cart should share one geo-resolved currency; fall back
-     to the first item's (or NGN) if that's ever not the case. */
-  const cartCurrency = items[0]?.course.currency ?? 'NGN';
+  const [promo, setPromo] = useState('');
+  const [promoApplied, setPromoApplied] = useState(false);
 
-  const total = subtotal;
+  const discount = promoApplied ? Math.round(subtotal * 0.1) : 0;
+  const total = subtotal - discount;
+
+  const applyPromo = () => {
+    if (promo.trim().toUpperCase() === 'ACECERTY10') setPromoApplied(true);
+  };
 
   return (
     <div className="min-h-screen pt-24 bg-background" style={{ fontFamily: 'var(--ace-font)' }}>
@@ -95,7 +98,7 @@ export default function CartPage() {
                         </button>
                       </div>
                       <span className="font-black text-foreground" style={{ fontSize: '1.1rem' }}>
-                        {formatPrice(course.price * quantity, course.currency ?? cartCurrency)}
+                        ₦{(course.price * quantity).toLocaleString()}
                       </span>
                     </div>
                   </div>
@@ -105,18 +108,57 @@ export default function CartPage() {
 
             {/* Order summary */}
             <div className="flex flex-col gap-5">
+              {/* Promo */}
+              <div className="bg-card rounded-2xl p-6 border border-border">
+                <h3 className="text-foreground font-semibold mb-4 flex items-center gap-2">
+                  <Tag className="h-4 w-4" style={{ color: 'var(--ace-brand)' }} /> Promo Code
+                </h3>
+                {promoApplied ? (
+                  <div className="flex items-center gap-2 text-sm font-medium" style={{ color: '#059669' }}>
+                    <CheckCircle className="h-4 w-4" /> 10% discount applied!
+                  </div>
+                ) : (
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={promo}
+                      onChange={(e) => setPromo(e.target.value)}
+                      placeholder="Enter code"
+                      className="flex-1 px-3 py-2.5 rounded-xl border border-border bg-input-background text-foreground text-sm focus:outline-none focus:ring-2"
+                      style={{ '--tw-ring-color': 'var(--ace-brand)' } as React.CSSProperties}
+                    />
+                    <button
+                      onClick={applyPromo}
+                      className="px-4 py-2.5 rounded-xl text-sm font-semibold text-white"
+                      style={{ backgroundColor: 'var(--ace-brand)' }}
+                    >
+                      Apply
+                    </button>
+                  </div>
+                )}
+                <p className="text-xs text-muted-foreground mt-2">
+                  Try <span className="font-semibold text-foreground">ACECERTY10</span> for 10% off
+                </p>
+              </div>
+
               {/* Summary */}
               <div className="bg-card rounded-2xl p-6 border border-border">
                 <h3 className="text-foreground font-semibold mb-5">Order Summary</h3>
                 <div className="flex flex-col gap-3 mb-5">
                   <div className="flex justify-between text-sm text-muted-foreground">
                     <span>Subtotal</span>
-                    <span>{formatPrice(subtotal, cartCurrency)}</span>
+                    <span>₦{subtotal.toLocaleString()}</span>
                   </div>
+                  {promoApplied && (
+                    <div className="flex justify-between text-sm" style={{ color: '#059669' }}>
+                      <span>Promo (ACECERTY10)</span>
+                      <span>-₦{discount.toLocaleString()}</span>
+                    </div>
+                  )}
                   <div className="h-px bg-border" />
                   <div className="flex justify-between text-foreground">
                     <span className="font-bold">Total</span>
-                    <span className="font-black text-xl">{formatPrice(total, cartCurrency)}</span>
+                    <span className="font-black text-xl">₦{total.toLocaleString()}</span>
                   </div>
                 </div>
 

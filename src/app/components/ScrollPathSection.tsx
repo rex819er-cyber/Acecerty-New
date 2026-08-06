@@ -5,7 +5,7 @@ import { Zap, Shield, Globe } from 'lucide-react';
 const WAYPOINTS = [
   { icon: Zap, title: 'Accelerated Learning', desc: 'Intensive bootcamps that compress months of study into days of high-impact training.', x: '10%', y: '18%' },
   { icon: Shield, title: 'Exam Guarantee', desc: 'Pass your cert on the first attempt or we cover your retake — no questions asked.', x: '62%', y: '48%' },
-  { icon: Globe, title: 'Global Recognition', desc: 'Vendor certifications recognised by employers worldwide.', x: '14%', y: '78%' },
+  { icon: Globe, title: 'Global Recognition', desc: 'Certifications recognised by top employers in 40+ countries worldwide.', x: '14%', y: '78%' },
 ];
 
 export function ScrollPathSection() {
@@ -22,8 +22,8 @@ export function ScrollPathSection() {
   return (
     <section
       ref={ref}
-      className="bg-background py-24 px-4"
-      style={{ fontFamily: 'var(--ace-font)', position: 'relative', overflow: 'hidden' }}
+      className="bg-background" style={{ fontFamily: 'var(--ace-font)', position: 'relative', overflow: 'hidden' }}
+      className="py-24 px-4"
     >
       <div className="max-w-7xl mx-auto">
         {/* Header */}

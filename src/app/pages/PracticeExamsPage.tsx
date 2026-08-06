@@ -1,15 +1,12 @@
-﻿import React, { useState } from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router';
-import { ClipboardCheck, Clock, FileText, BarChart2, ShoppingCart, Star, Search, Play, Wifi, AlertCircle } from 'lucide-react';
+import { ClipboardCheck, Clock, FileText, BarChart2, ShoppingCart, Star, Search, Play } from 'lucide-react';
 import { useCart } from '../context/CartContext';
-import { useApi, apiGetExamProducts, apiAddToCart, minorToMajor, formatPrice } from '../lib/api';
-import type { ExamProduct } from '../lib/api';
 
-type Domain = string;
+type Domain = 'All' | 'Cybersecurity' | 'Cloud' | 'Networking' | 'Management' | 'Privacy';
 
 interface PracticeExam {
   id: string;
-  slug?: string;
   domain: Domain;
   cert: string;
   certCode: string;
@@ -18,7 +15,6 @@ interface PracticeExam {
   duration: number;
   price: number;
   originalPrice: number;
-  currency: string;
   difficulty: 'Beginner' | 'Intermediate' | 'Advanced';
   rating: number;
   reviews: number;
@@ -26,39 +22,22 @@ interface PracticeExam {
   updated: string;
 }
 
-/* Colour is presentational only — the ExamProduct entity carries no palette,
-   so each domain gets a stable hue derived from its name. */
-const DOMAIN_COLORS = ['#005f6b', '#c0392b', '#ff9900', '#0078d4', '#1ba0d8', '#2c5282', '#db2777', '#4a4a8a'];
-const domainColor = (domain: string) => {
-  let h = 0;
-  for (let i = 0; i < domain.length; i++) h = (h * 31 + domain.charCodeAt(i)) >>> 0;
-  return DOMAIN_COLORS[h % DOMAIN_COLORS.length];
-};
+const PRACTICE_EXAMS: PracticeExam[] = [
+  { id: 'pe1', domain: 'Cybersecurity', cert: 'CISSP', certCode: 'CISSP', questions: 250, exams: 4, duration: 180, price: 49, originalPrice: 79, difficulty: 'Advanced', rating: 4.9, reviews: 1240, color: '#005f6b', updated: 'May 2026' },
+  { id: 'pe2', domain: 'Cybersecurity', cert: 'Security+', certCode: 'SY0-701', questions: 180, exams: 3, duration: 90, price: 29, originalPrice: 49, difficulty: 'Intermediate', rating: 4.8, reviews: 2890, color: '#c0392b', updated: 'Jun 2026' },
+  { id: 'pe3', domain: 'Cybersecurity', cert: 'CEH', certCode: 'CEH v13', questions: 125, exams: 2, duration: 120, price: 39, originalPrice: 59, difficulty: 'Advanced', rating: 4.7, reviews: 540, color: '#8b0000', updated: 'Apr 2026' },
+  { id: 'pe4', domain: 'Cybersecurity', cert: 'CySA+', certCode: 'CS0-003', questions: 120, exams: 2, duration: 90, price: 29, originalPrice: 49, difficulty: 'Intermediate', rating: 4.6, reviews: 320, color: '#b91c1c', updated: 'May 2026' },
+  { id: 'pe5', domain: 'Cloud', cert: 'AWS Solutions Architect', certCode: 'SAA-C03', questions: 130, exams: 2, duration: 90, price: 34, originalPrice: 54, difficulty: 'Intermediate', rating: 4.8, reviews: 1870, color: '#ff9900', updated: 'Jun 2026' },
+  { id: 'pe6', domain: 'Cloud', cert: 'Azure Administrator', certCode: 'AZ-104', questions: 120, exams: 2, duration: 90, price: 29, originalPrice: 49, difficulty: 'Intermediate', rating: 4.7, reviews: 980, color: '#0078d4', updated: 'May 2026' },
+  { id: 'pe7', domain: 'Cloud', cert: 'CCSP', certCode: 'CCSP', questions: 150, exams: 3, duration: 120, price: 39, originalPrice: 59, difficulty: 'Advanced', rating: 4.7, reviews: 410, color: '#0369a1', updated: 'Mar 2026' },
+  { id: 'pe8', domain: 'Networking', cert: 'CCNA', certCode: '200-301', questions: 120, exams: 2, duration: 120, price: 29, originalPrice: 49, difficulty: 'Intermediate', rating: 4.8, reviews: 1560, color: '#1ba0d8', updated: 'May 2026' },
+  { id: 'pe9', domain: 'Networking', cert: 'Network+', certCode: 'N10-009', questions: 100, exams: 2, duration: 90, price: 24, originalPrice: 39, difficulty: 'Beginner', rating: 4.7, reviews: 870, color: '#2563eb', updated: 'Jun 2026' },
+  { id: 'pe10', domain: 'Management', cert: 'PMP', certCode: 'PMP', questions: 180, exams: 3, duration: 230, price: 44, originalPrice: 69, difficulty: 'Advanced', rating: 4.8, reviews: 2140, color: '#2c5282', updated: 'Apr 2026' },
+  { id: 'pe11', domain: 'Management', cert: 'CISM', certCode: 'CISM', questions: 150, exams: 2, duration: 120, price: 39, originalPrice: 59, difficulty: 'Advanced', rating: 4.7, reviews: 580, color: '#4a4a8a', updated: 'Mar 2026' },
+  { id: 'pe12', domain: 'Privacy', cert: 'CDPSE', certCode: 'CDPSE', questions: 100, exams: 2, duration: 90, price: 29, originalPrice: 49, difficulty: 'Intermediate', rating: 4.6, reviews: 190, color: '#db2777', updated: 'Feb 2026' },
+];
 
-/* GET /api/exam-products returns the ExamProduct entity with money in minor
-   units and cert fields under certName / certCode. */
-function fromApi(p: ExamProduct): PracticeExam {
-  const price = minorToMajor(p.priceMinor);
-  return {
-    id: p.id,
-    slug: p.slug,
-    domain: p.domain,
-    cert: p.certName,
-    certCode: p.certCode,
-    questions: p.questionsCount,
-    exams: p.examsCount,
-    duration: p.perExamDurationMinutes,
-    price,
-    originalPrice: p.originalPriceMinor != null ? minorToMajor(p.originalPriceMinor) : price,
-    currency: p.currency,
-    difficulty: p.difficulty ?? 'Intermediate',
-    rating: Number(p.ratingAvg ?? 0),
-    reviews: Number(p.ratingCount ?? 0),
-    color: domainColor(p.domain),
-    updated: p.updatedLabel ?? '',
-  };
-}
-
+const DOMAINS: Domain[] = ['All', 'Cybersecurity', 'Cloud', 'Networking', 'Management', 'Privacy'];
 
 const DIFFICULTY_COLOR: Record<string, { bg: string; text: string }> = {
   Beginner:     { bg: '#dcfce7', text: '#16a34a' },
@@ -79,16 +58,12 @@ function ExamCard({ exam }: { exam: PracticeExam }) {
     category: exam.domain as any,
     price: exam.price,
     originalPrice: exam.originalPrice,
-    currency: exam.currency,
     duration: '90-day access',
-    delivery: 'Online, self-paced',
     level: exam.difficulty as any,
     type: 'online' as any,
     gradient: '',
     image: undefined,
     videos: undefined,
-    /* Tells the checkout which backend catalog this id belongs to. */
-    itemType: 'exam_product' as const,
   };
 
   return (
@@ -163,34 +138,24 @@ function ExamCard({ exam }: { exam: PracticeExam }) {
           >
             {exam.difficulty}
           </span>
-          {exam.updated && <span className="text-[10px] text-muted-foreground">Updated {exam.updated}</span>}
+          <span className="text-[10px] text-muted-foreground">Updated {exam.updated}</span>
         </div>
 
         <div className="flex items-center justify-between mb-4">
-          <div className="flex items-baseline gap-2">
-            <span className="font-black text-ace-brand" style={{ fontSize: '1.2rem' }}>{formatPrice(exam.price, exam.currency)}</span>
-            {exam.originalPrice > exam.price && (
-              <span className="text-xs line-through text-muted-foreground">{formatPrice(exam.originalPrice, exam.currency)}</span>
-            )}
-          </div>
+          <span className="font-black text-ace-brand" style={{ fontSize: '1.2rem' }}>₦60,000</span>
           <span className="text-xs text-muted-foreground">90-day access</span>
         </div>
 
         <div className="flex gap-2">
           <button
-            onClick={() => {
-              addToCart(courseForCart);
-              /* Keeps the signed-in user's server-side cart in step; a no-op
-                 (rejected and swallowed) for signed-out visitors. */
-              apiAddToCart('exam_product', exam.id).catch(() => {});
-            }}
+            onClick={() => addToCart(courseForCart)}
             className="flex-1 py-3 rounded-xl text-sm font-semibold text-white flex items-center justify-center gap-2 transition-all active:scale-[0.97] hover:opacity-90"
             style={{ backgroundColor: 'var(--ace-brand)' }}
           >
             <ShoppingCart className="h-4 w-4" /> Add
           </button>
           <Link
-            to={`/practice-exams/${encodeURIComponent(exam.slug ?? exam.certCode)}`}
+            to={`/practice-exams/${exam.certCode.toLowerCase().replace(/[^a-z0-9]/g, '-')}`}
             className="flex-1 py-3 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-all active:scale-[0.97] bg-muted text-foreground"
           >
             <Play className="h-4 w-4" /> Try Free
@@ -205,18 +170,7 @@ export default function PracticeExamsPage() {
   const [activeDomain, setActiveDomain] = useState<Domain>('All');
   const [query, setQuery] = useState('');
 
-  /* GET /api/exam-products — filtering stays client-side so the domain tabs and
-     search box respond instantly once the catalog is in hand. */
-  const { data, loading, error, slowConnection } = useApi(
-    () => apiGetExamProducts({ limit: 100 }),
-    [],
-  );
-
-  const exams: PracticeExam[] = (data ?? []).map(fromApi);
-
-  const DOMAINS: Domain[] = ['All', ...Array.from(new Set(exams.map((e) => e.domain))).sort()];
-
-  const filtered = exams.filter((e) => {
+  const filtered = PRACTICE_EXAMS.filter((e) => {
     const matchDomain = activeDomain === 'All' || e.domain === activeDomain;
     const matchQuery = !query || e.cert.toLowerCase().includes(query.toLowerCase()) || e.certCode.toLowerCase().includes(query.toLowerCase());
     return matchDomain && matchQuery;
@@ -238,6 +192,23 @@ export default function PracticeExamsPage() {
             Full-length practice exams written by certified experts. Detailed explanations for every question so you understand, not just memorise.
           </p>
 
+          {/* Stats */}
+          <div className="flex flex-wrap gap-4 mb-8">
+            {[
+              { icon: BarChart2, value: '95%', label: 'Pass Rate' },
+              { icon: FileText, value: '2,500+', label: 'Questions' },
+              { icon: ClipboardCheck, value: '30+', label: 'Exams Available' },
+            ].map(({ icon: Icon, value, label }) => (
+              <div key={label} className="flex items-center gap-3 px-4 py-3 rounded-xl bg-white/10 border border-white/15">
+                <Icon className="h-5 w-5" style={{ color: '#F97316' }} />
+                <div>
+                  <p className="text-white font-bold">{value}</p>
+                  <p className="text-white/50 text-xs">{label}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+
           {/* Search */}
           <div className="relative max-w-lg">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-white/40" />
@@ -254,19 +225,6 @@ export default function PracticeExamsPage() {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {slowConnection && loading && (
-          <div className="flex items-center gap-2 mb-6 px-4 py-3 rounded-xl text-sm"
-            style={{ background: 'var(--ace-brand-light)', color: 'var(--ace-brand)' }}>
-            <Wifi className="h-4 w-4 animate-pulse shrink-0" /> Loading the exam catalog…
-          </div>
-        )}
-        {error && (
-          <div className="flex items-center gap-2 mb-6 px-4 py-3 rounded-xl text-sm"
-            style={{ background: 'var(--muted)', color: 'var(--destructive)' }}>
-            <AlertCircle className="h-4 w-4 shrink-0" /> Could not load the exam catalog: {error}
-          </div>
-        )}
-
         {/* Domain filter */}
         <div className="flex flex-wrap gap-2 mb-8">
           {DOMAINS.map((d) => (
@@ -286,18 +244,10 @@ export default function PracticeExamsPage() {
           <span className="ml-auto self-center text-sm text-muted-foreground">{filtered.length} exams</span>
         </div>
 
-        {loading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-            {Array.from({ length: 8 }).map((_, i) => (
-              <div key={i} className="rounded-2xl h-80 animate-pulse" style={{ backgroundColor: 'var(--muted)' }} />
-            ))}
-          </div>
-        ) : filtered.length === 0 ? (
+        {filtered.length === 0 ? (
           <div className="text-center py-24">
             <ClipboardCheck className="h-12 w-12 text-border mx-auto mb-4" />
-            <p className="text-muted-foreground font-medium">
-              {exams.length === 0 ? 'No practice exams have been published yet' : 'No practice exams match your search'}
-            </p>
+            <p className="text-muted-foreground font-medium">No practice exams found</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">

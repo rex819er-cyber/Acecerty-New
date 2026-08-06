@@ -1,41 +1,15 @@
 import React, { useState } from 'react';
-import { Send, CheckCircle, Loader2, AlertCircle } from 'lucide-react';
-import { apiSubmitContact } from '../lib/api';
+import { Send, CheckCircle } from 'lucide-react';
 
 const REQUEST_TYPES = ['Individual Training', 'Team Training', 'Enterprise Solutions', 'Request Quote', 'Other'];
 
 export function LeadForm() {
   const [submitted, setSubmitted] = useState(false);
-  const [sending, setSending]     = useState(false);
-  const [error, setError]         = useState('');
   const [form, setForm] = useState({ firstName: '', lastName: '', email: '', phone: '', company: '', requestType: '', message: '' });
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
     setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
-
-  /* POST /api/leads/contact — the backend's ContactDto is {name, email, phone,
-     message}, so company/request-type are folded into the message body. */
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSending(true); setError('');
-    const context = [
-      form.requestType && `Request type: ${form.requestType}`,
-      form.company    && `Company: ${form.company}`,
-    ].filter(Boolean).join('\n');
-    try {
-      await apiSubmitContact({
-        name: `${form.firstName} ${form.lastName}`.trim(),
-        email: form.email,
-        phone: form.phone || undefined,
-        message: [context, form.message].filter(Boolean).join('\n\n') || 'Training enquiry',
-      });
-      setSubmitted(true);
-    } catch (err: unknown) {
-      setError((err as { message?: string })?.message ?? 'Could not send your request. Please try again.');
-    } finally {
-      setSending(false);
-    }
-  };
+  const handleSubmit = (e: React.FormEvent) => { e.preventDefault(); setSubmitted(true); };
 
   const inputCls = 'w-full px-4 py-3 rounded-xl text-sm focus:outline-none focus:ring-2 transition-all';
   const inputStyle = { backgroundColor: 'var(--input-background)', border: '1px solid var(--border)', color: 'var(--foreground)', '--tw-ring-color': '#00A2B6' } as React.CSSProperties;
@@ -70,6 +44,11 @@ export function LeadForm() {
             <p className="mb-10 leading-relaxed text-muted-foreground text-sm sm:text-base">
               Whether you're an individual looking to level up or an enterprise building a security-ready team, our training advisors are ready to help you find the right path.
             </p>
+            <div className="grid grid-cols-3 gap-4 sm:gap-6">
+              {[{ val: '250k+', label: 'Students trained' }, { val: '94%', label: 'Pass rate' }, { val: '27 yrs', label: 'Industry experience' }].map((s) => (
+                null
+              ))}
+            </div>
           </div>
 
           {/* Right: form */}
@@ -120,20 +99,12 @@ export function LeadForm() {
                   <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Message</label>
                   <textarea name="message" value={form.message} onChange={handleChange} rows={3} placeholder="Tell us about your training goals…" className={inputCls} style={{ ...inputStyle, resize: 'none' }} />
                 </div>
-                {error && (
-                  <p className="flex items-center gap-2 text-sm" style={{ color: 'var(--destructive)' }}>
-                    <AlertCircle className="h-4 w-4 shrink-0" /> {error}
-                  </p>
-                )}
                 <button
                   type="submit"
-                  disabled={sending}
-                  className="mt-2 w-full py-4 rounded-xl font-bold text-white flex items-center justify-center gap-2 transition-all hover:opacity-90 active:scale-[0.98] disabled:opacity-60"
+                  className="mt-2 w-full py-4 rounded-xl font-bold text-white flex items-center justify-center gap-2 transition-all hover:opacity-90 active:scale-[0.98]"
                   style={{ backgroundColor: '#00A2B6' }}
                 >
-                  {sending
-                    ? <><Loader2 className="h-4 w-4 animate-spin" /> Sending…</>
-                    : <><Send className="h-4 w-4" /> Submit Request</>}
+                  <Send className="h-4 w-4" /> Submit Request
                 </button>
               </form>
             )}

@@ -1,31 +1,19 @@
 /* ─────────────────────────────────────────────────────────────────────────
    Acecerty — payment service client
 
-   The backend has no single "checkout" call. Paying is two steps:
-
-     POST /api/orders            { items? }   → Order (prices snapshotted)
-     POST /api/orders/:id/pay    { provider } → { orderId, reference, checkoutUrl }
-
-   Settlement is then confirmed by the provider's signed webhook
-   (POST /api/webhooks/paystack | /flutterwave), which grants entitlements.
-   There is no client-callable verify endpoint, so the return page polls
-   GET /api/orders/:id until the order flips to `paid`.
+   POST /api/orders/checkout        → { authorizationUrl, reference, … }
+   GET  /api/orders/verify?reference → { status, order, … }
 
    Every call carries `Authorization: Bearer <jwt>`. The token is read in the
    order the backend spec prescribes: `accessToken` first, then
    `student_access_token`.
 ───────────────────────────────────────────────────────────────────────── */
 
-import { API_BASE, minorToMajor } from './api';
-import type { ApiError, ItemType, Order, PaymentInit } from './api';
+import { API_BASE } from './api';
+import type { ApiError } from './api';
 
-/** The providers the backend can actually initialise a charge with. */
-export type PaymentProvider = 'paystack' | 'flutterwave';
-
-export type { ItemType, Order };
-
-/** Where a pending order is parked between the redirect and the return trip. */
-const PENDING_ORDER_KEY = 'acecerty_pending_order';
+export type PaymentProvider = 'paystack' | 'flutterwave' | 'stripe';
+export type PaymentMethod   = 'apple_pay' | 'google_pay' | 'card' | 'gateway';
 
 /** Reads the active student JWT, or null when the visitor is signed out. */
 export function getActiveToken(): string | null {
@@ -65,7 +53,7 @@ async function authorisedRequest<T>(path: string, init: RequestInit = {}, ms = 6
     if (!res.ok) {
       let msg = `API ${res.status}`;
       try { const b = await res.json(); msg = b?.message ?? b?.error ?? msg; } catch {}
-      throw { message: Array.isArray(msg) ? msg.join(', ') : msg, status: res.status } as ApiError;
+      throw { message: msg, status: res.status } as ApiError;
     }
     return (await res.json()) as T;
   } catch (err: any) {
@@ -78,124 +66,72 @@ async function authorisedRequest<T>(path: string, init: RequestInit = {}, ms = 6
 
 /* ── checkout ─────────────────────────────────────────────────────────── */
 
-export interface CheckoutLine { itemType: ItemType; itemId: string }
-
 export interface CheckoutRequest {
-  /** Omit to let the backend build the order from the user's server-side cart. */
-  items?: CheckoutLine[];
-  provider: PaymentProvider;
+  courseId: string;
+  paymentProvider: PaymentProvider;
+  paymentMethod: PaymentMethod;
+  /** Extra courses when the cart holds more than one; ignored by backends that don't read it. */
+  courseIds?: string[];
+  email?: string;
+  amount?: number;
 }
 
-export interface CheckoutResult {
-  orderId: string;
-  reference: string;
-  checkoutUrl: string;
-  /** Order total in major units, for the confirmation copy. */
-  total: number;
-  currency: string;
+/* Gateways disagree on what they call the hosted-checkout URL, so accept the
+   whole family and normalise downstream. */
+export interface CheckoutResponse {
+  authorizationUrl?: string;
+  authorization_url?: string;
+  paymentUrl?: string;
+  checkoutUrl?: string;
+  link?: string;
+  reference?: string;
+  accessCode?: string;
+  orderId?: string;
+  data?: Record<string, any>;
 }
 
-export interface PendingOrder { orderId: string; reference: string; total: number; currency: string }
-
-/** Remembers which order the gateway was sent to, so the return page can poll it. */
-export function rememberPendingOrder(o: PendingOrder) {
-  try { sessionStorage.setItem(PENDING_ORDER_KEY, JSON.stringify(o)); } catch {}
-}
-export function readPendingOrder(): PendingOrder | null {
-  try {
-    const raw = sessionStorage.getItem(PENDING_ORDER_KEY);
-    return raw ? (JSON.parse(raw) as PendingOrder) : null;
-  } catch { return null; }
-}
-export function clearPendingOrder() {
-  try { sessionStorage.removeItem(PENDING_ORDER_KEY); } catch {}
+/** Pulls the hosted-gateway URL out of whichever key the backend used. */
+export function extractAuthorizationUrl(res: CheckoutResponse): string | null {
+  const d = res.data ?? {};
+  return (
+    res.authorizationUrl ?? res.authorization_url ?? res.paymentUrl ?? res.checkoutUrl ?? res.link ??
+    d.authorizationUrl ?? d.authorization_url ?? d.paymentUrl ?? d.checkoutUrl ?? d.link ??
+    null
+  );
 }
 
-/**
- * Creates the order, then initialises the charge. The two calls are kept
- * together because a created-but-unpaid order is useless to the buyer, and the
- * gateway URL is what the UI actually needs.
- */
-export async function startCheckout(req: CheckoutRequest): Promise<CheckoutResult> {
-  const order = await authorisedRequest<Order>('/orders', {
+export function extractReference(res: CheckoutResponse): string | null {
+  return res.reference ?? res.data?.reference ?? res.data?.tx_ref ?? null;
+}
+
+export const startCheckout = (payload: CheckoutRequest) =>
+  authorisedRequest<CheckoutResponse>('/orders/checkout', {
     method: 'POST',
-    body: JSON.stringify(req.items?.length ? { items: req.items } : {}),
+    body: JSON.stringify(payload),
   });
-
-  const init = await authorisedRequest<PaymentInit>(`/orders/${order.id}/pay`, {
-    method: 'POST',
-    body: JSON.stringify({ provider: req.provider }),
-  });
-
-  const result: CheckoutResult = {
-    orderId: order.id,
-    reference: init.reference,
-    checkoutUrl: init.checkoutUrl,
-    total: minorToMajor(order.totalMinor),
-    currency: order.currency,
-  };
-  rememberPendingOrder({ orderId: result.orderId, reference: result.reference, total: result.total, currency: result.currency });
-  return result;
-}
 
 /* ── verification ─────────────────────────────────────────────────────── */
 
 export interface VerifyResponse {
-  status: string;
+  status?: string;
+  success?: boolean;
+  paid?: boolean;
   reference?: string;
-  order: { id: string; total: number; status: string; currency: string; items: { itemId: string; itemType: ItemType; title: string; price: number }[] };
+  amount?: number;
+  currency?: string;
+  order?: { id: string; total: number; status: string; items?: { courseId: string; price: number }[] };
+  message?: string;
+  data?: Record<string, any>;
 }
 
-/**
- * Reads the order back. Fulfilment is driven by the provider webhook, so a
- * freshly-returned buyer can legitimately still see `pending` for a few
- * seconds — hence the polling helper below rather than a single check.
- */
-export async function verifyOrder(orderId: string): Promise<VerifyResponse> {
-  const order = await authorisedRequest<Order>(`/orders/${orderId}`);
-  return {
-    status: order.status,
-    order: {
-      id: order.id,
-      total: minorToMajor(order.totalMinor),
-      status: order.status,
-      currency: order.currency,
-      items: (order.items ?? []).map((i) => ({
-        itemId: i.itemId,
-        itemType: i.itemType,
-        title: i.titleSnapshot,
-        price: minorToMajor(i.lineTotalMinor),
-      })),
-    },
-  };
-}
+export const verifyPayment = (reference: string) =>
+  authorisedRequest<VerifyResponse>(`/orders/verify?reference=${encodeURIComponent(reference)}`);
 
-/** True when the order has settled. */
+/** True when the verification response indicates a settled payment. */
 export function isPaymentSuccessful(res: VerifyResponse): boolean {
-  return String(res.status ?? '').toLowerCase() === 'paid';
-}
-
-/** True when the order will never settle — no point polling further. */
-export function isPaymentTerminalFailure(res: VerifyResponse): boolean {
-  return ['failed', 'cancelled', 'refunded'].includes(String(res.status ?? '').toLowerCase());
-}
-
-/**
- * Polls the order until it settles, fails, or the attempts run out. Spacing is
- * deliberately generous: the webhook usually lands within a couple of seconds,
- * and each poll is a round-trip to a cold-startable host.
- */
-export async function pollOrderUntilSettled(
-  orderId: string,
-  { attempts = 6, intervalMs = 2500 }: { attempts?: number; intervalMs?: number } = {},
-): Promise<VerifyResponse> {
-  let last = await verifyOrder(orderId);
-  for (let i = 1; i < attempts; i++) {
-    if (isPaymentSuccessful(last) || isPaymentTerminalFailure(last)) return last;
-    await new Promise((r) => setTimeout(r, intervalMs));
-    last = await verifyOrder(orderId);
-  }
-  return last;
+  const status = String(res.status ?? res.order?.status ?? res.data?.status ?? '').toLowerCase();
+  if (res.success === true || res.paid === true) return true;
+  return ['success', 'successful', 'paid', 'completed', 'complete'].includes(status);
 }
 
 /* ── UI selection → gateway wire values ───────────────────────────────── */
@@ -203,16 +139,12 @@ export async function pollOrderUntilSettled(
 /** The payment options the checkout UI offers. */
 export type UiPayOption = 'paystack' | 'flutterwave' | 'card' | 'apple_pay' | 'google_pay';
 
-/**
- * Every option collapses onto one of the two providers the backend supports.
- * Cards and wallets are presented by Paystack's own hosted checkout, so they
- * route there rather than to a separate processor.
- */
-export function resolveProvider(option: UiPayOption): PaymentProvider {
-  return option === 'flutterwave' ? 'flutterwave' : 'paystack';
-}
-
-/* Legacy shape kept for callers that spread the result into a request body. */
-export function resolveGateway(option: UiPayOption): { provider: PaymentProvider } {
-  return { provider: resolveProvider(option) };
+export function resolveGateway(option: UiPayOption): { paymentProvider: PaymentProvider; paymentMethod: PaymentMethod } {
+  switch (option) {
+    case 'paystack':    return { paymentProvider: 'paystack',    paymentMethod: 'gateway'    };
+    case 'flutterwave': return { paymentProvider: 'flutterwave', paymentMethod: 'gateway'    };
+    case 'card':        return { paymentProvider: 'paystack',    paymentMethod: 'card'       };
+    case 'apple_pay':   return { paymentProvider: 'stripe',      paymentMethod: 'apple_pay'  };
+    case 'google_pay':  return { paymentProvider: 'stripe',      paymentMethod: 'google_pay' };
+  }
 }

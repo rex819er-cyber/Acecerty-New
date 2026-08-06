@@ -1,43 +1,13 @@
 import React, { useState, useMemo, useCallback } from 'react';
-import { Search, Clock, Play, HelpCircle, X, ChevronRight, ChevronLeft, BookOpen, Wifi } from 'lucide-react';
+import { Search, Clock, Play, HelpCircle, X, ChevronRight, ChevronLeft, BookOpen } from 'lucide-react';
 import { Link } from 'react-router';
 import { motion, AnimatePresence } from 'motion/react';
+import { CSV_COURSES, COURSES_PER_PAGE } from '../data/csvCourses';
+import type { CsvCourse } from '../data/csvCourses';
 import { ImageWithFallback } from '../components/figma/ImageWithFallback';
-import { useApi, apiGetCourses, formatPrice } from '../lib/api';
-import type { ApiCourse } from '../lib/api';
 
-const COURSES_PER_PAGE = 12;
-
-/* Every card is a course the backend actually publishes. */
-interface CatalogCourse {
-  id: string;
-  slug?: string;
-  title: string;
-  description: string;
-  image: string;
-  duration: string;
-  videos: string;
-  questions: string;
-  category: string;
-  price: number;
-  currency: string;
-}
-
-function fromApi(c: ApiCourse): CatalogCourse {
-  return {
-    id:          c.id,
-    slug:        c.slug,
-    title:       c.title,
-    description: c.description || '',
-    image:       c.image || '',
-    duration:    c.duration || '—',
-    videos:      c.videos || '—',
-    questions:   c.questions || '—',
-    category:    c.category || 'IT Training',
-    price:       c.price ?? 0,
-    currency:    c.currency,
-  };
-}
+// ─── Constants ─────────────────────────────────────────────────────────────
+const ALL_CATEGORIES = ['All', ...Array.from(new Set(CSV_COURSES.map((c) => c.category))).sort()];
 
 const CATEGORY_ACCENT: Record<string, string> = {
   CompTIA:            '#E31837',
@@ -89,10 +59,8 @@ function MetaBadge({
 }
 
 // ─── Course card ───────────────────────────────────────────────────────────
-function CourseCard({ course, index }: { course: CatalogCourse; index: number }) {
+function CourseCard({ course, index }: { course: CsvCourse; index: number }) {
   const accent = accentFor(course.category);
-  /* Live courses resolve by slug; CSV rows keep their bundled id. */
-  const href = `/courses/${encodeURIComponent(course.slug ?? course.id)}`;
 
   return (
     <motion.article
@@ -202,11 +170,11 @@ function CourseCard({ course, index }: { course: CatalogCourse; index: number })
               fontFamily: 'var(--ace-font)',
             }}
           >
-            {formatPrice(course.price, course.currency)}
+            ₦{course.price.toLocaleString()}
           </span>
 
           <Link
-            to={href}
+            to={`/courses/${course.id}`}
             className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl font-bold text-white transition-all duration-150 active:scale-95 hover:gap-2"
             style={{
               backgroundColor: 'var(--ace-brand)',
@@ -325,21 +293,10 @@ export default function CourseCatalog() {
   const [activeCategory, setActiveCategory] = useState('All');
   const [page, setPage] = useState(1);
 
-  /* GET /api/courses — search and paging stay client-side so the filters stay
-     instant once the catalog is loaded. */
-  const { data, loading, error, slowConnection } = useApi(() => apiGetCourses({ limit: 100 }), []);
-
-  const allCourses = useMemo(() => (data ?? []).map(fromApi), [data]);
-
-  const ALL_CATEGORIES = useMemo(
-    () => ['All', ...Array.from(new Set(allCourses.map((c) => c.category))).sort()],
-    [allCourses],
-  );
-
   // Filtered master list
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return allCourses.filter((c) => {
+    return CSV_COURSES.filter((c) => {
       const matchQ =
         !q ||
         c.title.toLowerCase().includes(q) ||
@@ -348,7 +305,7 @@ export default function CourseCatalog() {
       const matchCat = activeCategory === 'All' || c.category === activeCategory;
       return matchQ && matchCat;
     });
-  }, [allCourses, query, activeCategory]);
+  }, [query, activeCategory]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / COURSES_PER_PAGE));
 
@@ -418,7 +375,8 @@ export default function CourseCatalog() {
               fontFamily: 'var(--ace-font)',
             }}
           >
-            {allCourses.length} courses — from accelerated bootcamps to self-paced online training.
+            {CSV_COURSES.length} courses — from accelerated bootcamps to self-paced online training.
+            All priced at ₦60,000 flat.
           </p>
 
           {/* Search */}
@@ -457,24 +415,6 @@ export default function CourseCatalog() {
 
       {/* ── Filter + grid area ─────────────────────────────── */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-4">
-
-        {slowConnection && loading && (
-          <div
-            className="flex items-center gap-2 mb-6 px-4 py-3 rounded-xl"
-            style={{ background: 'var(--ace-brand-light)', color: 'var(--ace-brand)', fontSize: '0.82rem', fontFamily: 'var(--ace-font)' }}
-          >
-            <Wifi className="h-4 w-4 animate-pulse flex-shrink-0" /> Loading the catalog…
-          </div>
-        )}
-
-        {error && (
-          <div
-            className="flex items-center gap-2 mb-6 px-4 py-3 rounded-xl"
-            style={{ background: 'var(--muted)', color: 'var(--destructive)', fontSize: '0.82rem', fontFamily: 'var(--ace-font)' }}
-          >
-            <X className="h-4 w-4 flex-shrink-0" /> Could not load the catalog: {error}
-          </div>
-        )}
 
         {/* Category chips — horizontal scroll on mobile */}
         <div className="flex gap-2 overflow-x-auto pb-2 mb-6 scrollbar-hide">
@@ -520,17 +460,8 @@ export default function CourseCatalog() {
           )}
         </div>
 
-        {/* ── Loading skeleton ─────────────────────────────── */}
-        {loading && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-            {Array.from({ length: 8 }).map((_, i) => (
-              <div key={i} className="rounded-2xl animate-pulse" style={{ height: 350, backgroundColor: 'var(--muted)' }} />
-            ))}
-          </div>
-        )}
-
         {/* ── No results ───────────────────────────────────── */}
-        {!loading && filtered.length === 0 && (
+        {filtered.length === 0 && (
           <div className="flex flex-col items-center justify-center py-28 text-center">
             <div
               className="h-16 w-16 rounded-full flex items-center justify-center mb-5"
@@ -539,22 +470,18 @@ export default function CourseCatalog() {
               <BookOpen className="h-7 w-7" style={{ color: 'var(--muted-foreground)' }} />
             </div>
             <p style={{ fontSize: '1.05rem', fontWeight: 700, color: 'var(--foreground)', marginBottom: 6, fontFamily: 'var(--ace-font)' }}>
-              {allCourses.length === 0 ? 'No courses have been published yet' : 'No courses match your search'}
+              No courses match your search
             </p>
             <p style={{ fontSize: '0.88rem', color: 'var(--muted-foreground)', marginBottom: 24, fontFamily: 'var(--ace-font)' }}>
-              {allCourses.length === 0
-                ? 'Published courses will appear here as soon as they go live.'
-                : 'Try different keywords or browse all categories.'}
+              Try different keywords or browse all categories.
             </p>
-            {allCourses.length > 0 && (
-              <button
-                onClick={() => { setQuery(''); setActiveCategory('All'); setPage(1); }}
-                className="px-6 py-3 rounded-full font-bold text-white"
-                style={{ backgroundColor: 'var(--ace-brand)', fontFamily: 'var(--ace-font)' }}
-              >
-                Show All Courses
-              </button>
-            )}
+            <button
+              onClick={() => { setQuery(''); setActiveCategory('All'); setPage(1); }}
+              className="px-6 py-3 rounded-full font-bold text-white"
+              style={{ backgroundColor: 'var(--ace-brand)', fontFamily: 'var(--ace-font)' }}
+            >
+              Show All Courses
+            </button>
           </div>
         )}
 
