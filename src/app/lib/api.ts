@@ -47,6 +47,31 @@ function tokenFor(endpoint: string): string | null {
 /* ── core fetch ────────────────────────────────────────────────────────── */
 export type ApiError = { message: string; status?: number; isTimeout?: boolean };
 
+/**
+ * Reads a Response body as JSON only when the server actually sent JSON.
+ *
+ * When a proxy, CDN, or cold-starting host returns an HTML error page the
+ * browser's native `.json()` throws "Unexpected token '<'" — an opaque crash
+ * that hides the real status code.  This helper checks Content-Type first and
+ * surfaces a clean, actionable message instead.
+ */
+async function safeJson<T>(res: Response): Promise<T> {
+  const ct = res.headers.get('content-type') ?? '';
+  const isJson = ct.includes('application/json') || ct.includes('text/json');
+
+  if (!isJson) {
+    /* Read up to 200 chars of the body for a useful snippet in the error. */
+    const snippet = await res.text().then(t => t.trimStart().slice(0, 200)).catch(() => '');
+    const hint    = snippet.startsWith('<') ? ' (server returned HTML — check the API base URL)' : snippet ? `: ${snippet}` : '';
+    throw {
+      message: `Server error ${res.status}${hint}`,
+      status:  res.status,
+    } as ApiError;
+  }
+
+  return res.json() as Promise<T>;
+}
+
 async function request<T>(endpoint: string, options: RequestInit = {}, ms = 60_000): Promise<T> {
   const ctrl  = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), ms);
@@ -61,14 +86,23 @@ async function request<T>(endpoint: string, options: RequestInit = {}, ms = 60_0
     const res = await fetch(`${API_BASE}${endpoint}`, { ...options, headers, signal: ctrl.signal, mode: 'cors' });
     clearTimeout(timer);
     if (!res.ok) {
+      /* Try to extract a message from a JSON error body; fall back to safeJson
+         which will surface a readable error even for HTML responses. */
+      const ct = res.headers.get('content-type') ?? '';
       let msg = `API ${res.status}`;
-      try { const b = await res.json(); msg = b?.message ?? msg; } catch {}
+      if (ct.includes('application/json') || ct.includes('text/json')) {
+        try { const b = await res.json(); msg = b?.message ?? b?.error ?? msg; } catch {}
+      } else {
+        const snippet = await res.text().then(t => t.trimStart().slice(0, 200)).catch(() => '');
+        if (snippet.startsWith('<')) msg = `Server returned HTML for ${res.status} — verify VITE_API_BASE_URL`;
+        else if (snippet) msg = `${msg}: ${snippet}`;
+      }
       throw { message: msg, status: res.status } as ApiError;
     }
-    return (await res.json()) as T;
+    return await safeJson<T>(res);
   } catch (err: any) {
     clearTimeout(timer);
-    if (err.name === 'AbortError')
+    if (err?.name === 'AbortError')
       throw { message: 'Request timed out — server may be waking up', isTimeout: true } as ApiError;
     throw err as ApiError;
   }
@@ -76,10 +110,20 @@ async function request<T>(endpoint: string, options: RequestInit = {}, ms = 60_0
 
 export async function upload<T>(endpoint: string, fd: FormData): Promise<T> {
   const token = tokenFor(endpoint);
-  const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
-  const res = await fetch(`${API_BASE}${endpoint}`, { method: 'POST', headers, body: fd });
-  if (!res.ok) throw { message: `Upload ${res.status}`, status: res.status } as ApiError;
-  return (await res.json()) as T;
+  const headers: Record<string, string> = {
+    Accept: 'application/json',
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+  };
+  const res = await fetch(`${API_BASE}${endpoint}`, { method: 'POST', headers, body: fd, mode: 'cors' });
+  if (!res.ok) {
+    const ct = res.headers.get('content-type') ?? '';
+    let msg = `Upload failed (${res.status})`;
+    if (ct.includes('application/json') || ct.includes('text/json')) {
+      try { const b = await res.json(); msg = b?.message ?? msg; } catch {}
+    }
+    throw { message: msg, status: res.status } as ApiError;
+  }
+  return safeJson<T>(res);
 }
 
 /* ── shared types ──────────────────────────────────────────────────────── */

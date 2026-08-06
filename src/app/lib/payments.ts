@@ -27,6 +27,22 @@ export class NotAuthenticatedError extends Error {
   constructor() { super('Please sign in to complete enrolment'); this.name = 'NotAuthenticatedError'; }
 }
 
+/**
+ * Reads a Response body as JSON only when the server actually sent JSON.
+ * Mirrors the same helper in api.ts — kept local so payments.ts has no
+ * circular dependency on the central API module.
+ */
+async function safeJson<T>(res: Response): Promise<T> {
+  const ct = res.headers.get('content-type') ?? '';
+  const isJson = ct.includes('application/json') || ct.includes('text/json');
+  if (!isJson) {
+    const snippet = await res.text().then(t => t.trimStart().slice(0, 200)).catch(() => '');
+    const hint    = snippet.startsWith('<') ? ' (server returned HTML — check the API base URL)' : snippet ? `: ${snippet}` : '';
+    throw { message: `Server error ${res.status}${hint}`, status: res.status } as ApiError;
+  }
+  return res.json() as Promise<T>;
+}
+
 /* Authorised fetch — refuses to leave the browser without a Bearer token so a
    signed-out user can never trigger an anonymous order. */
 async function authorisedRequest<T>(path: string, init: RequestInit = {}, ms = 60_000): Promise<T> {
@@ -51,11 +67,18 @@ async function authorisedRequest<T>(path: string, init: RequestInit = {}, ms = 6
     clearTimeout(timer);
 
     if (!res.ok) {
+      const ct = res.headers.get('content-type') ?? '';
       let msg = `API ${res.status}`;
-      try { const b = await res.json(); msg = b?.message ?? b?.error ?? msg; } catch {}
+      if (ct.includes('application/json') || ct.includes('text/json')) {
+        try { const b = await res.json(); msg = b?.message ?? b?.error ?? msg; } catch {}
+      } else {
+        const snippet = await res.text().then(t => t.trimStart().slice(0, 200)).catch(() => '');
+        if (snippet.startsWith('<')) msg = `Server returned HTML for ${res.status} — verify VITE_API_BASE_URL`;
+        else if (snippet) msg = `${msg}: ${snippet}`;
+      }
       throw { message: msg, status: res.status } as ApiError;
     }
-    return (await res.json()) as T;
+    return await safeJson<T>(res);
   } catch (err: any) {
     clearTimeout(timer);
     if (err?.name === 'AbortError')
