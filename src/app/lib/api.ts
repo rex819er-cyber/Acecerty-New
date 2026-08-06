@@ -48,6 +48,31 @@ function tokenFor(endpoint: string): string | null {
 export type ApiError = { message: string; status?: number; isTimeout?: boolean };
 
 /**
+ * User-readable fallback messages for common HTTP status codes.
+ *
+ * These are used when the backend either sends no body or a non-JSON body,
+ * so the UI never shows a raw "API 405" string.  Any real `message` field
+ * returned by the backend always takes priority.
+ */
+export function httpStatusMessage(status: number): string {
+  const MAP: Record<number, string> = {
+    400: 'The request was invalid. Please check your input.',
+    401: 'Incorrect email or password.',
+    403: 'You do not have permission to perform this action.',
+    404: 'The requested resource was not found.',
+    405: 'This action is not supported by the server. The API base URL may be misconfigured.',
+    409: 'A conflict occurred — this account may already exist.',
+    422: 'The submitted information was invalid.',
+    429: 'Too many requests. Please wait a moment and try again.',
+    500: 'Server error. Please try again in a moment.',
+    502: 'The server is temporarily unavailable.',
+    503: 'Service unavailable. Please try again shortly.',
+    504: 'The server took too long to respond.',
+  };
+  return MAP[status] ?? `Request failed (${status})`;
+}
+
+/**
  * Reads a Response body as JSON only when the server actually sent JSON.
  *
  * When a proxy, CDN, or cold-starting host returns an HTML error page the
@@ -86,16 +111,21 @@ async function request<T>(endpoint: string, options: RequestInit = {}, ms = 60_0
     const res = await fetch(`${API_BASE}${endpoint}`, { ...options, headers, signal: ctrl.signal, mode: 'cors' });
     clearTimeout(timer);
     if (!res.ok) {
-      /* Try to extract a message from a JSON error body; fall back to safeJson
-         which will surface a readable error even for HTML responses. */
       const ct = res.headers.get('content-type') ?? '';
-      let msg = `API ${res.status}`;
+      /* Start with a human-readable fallback; the backend message (if present)
+         always overwrites it so real error details are never hidden. */
+      let msg = httpStatusMessage(res.status);
       if (ct.includes('application/json') || ct.includes('text/json')) {
-        try { const b = await res.json(); msg = b?.message ?? b?.error ?? msg; } catch {}
+        try {
+          const b = await res.json();
+          msg = b?.message ?? b?.error ?? b?.detail ?? msg;
+        } catch {}
       } else {
         const snippet = await res.text().then(t => t.trimStart().slice(0, 200)).catch(() => '');
-        if (snippet.startsWith('<')) msg = `Server returned HTML for ${res.status} — verify VITE_API_BASE_URL`;
-        else if (snippet) msg = `${msg}: ${snippet}`;
+        if (snippet.startsWith('<'))
+          msg = `The server returned an unexpected HTML response (${res.status}). Check your VITE_API_BASE_URL.`;
+        else if (snippet)
+          msg = snippet;
       }
       throw { message: msg, status: res.status } as ApiError;
     }

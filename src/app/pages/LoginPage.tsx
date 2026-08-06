@@ -4,8 +4,31 @@ import { Link, useNavigate, useLocation } from 'react-router';
 import { AcecertyLogo } from '../components/AcecertyLogo';
 import { useAuth } from '../context/AuthContext';
 import { SocialAuthButtons } from '../components/SocialAuthButtons';
+import { httpStatusMessage } from '../lib/api';
 
 type Tab = 'signin' | 'signup';
+
+/**
+ * Converts raw API errors into sentences a user can act on.
+ * The backend message takes priority; status-code fallbacks are a last resort.
+ */
+function friendlyAuthError(err: any, tab: Tab): string {
+  const raw: string = err?.message ?? '';
+  const status: number | undefined = err?.status;
+
+  /* If the message is still a raw "API NNN" pattern, replace it */
+  if (/^API \d{3}$/.test(raw.trim()) || !raw) {
+    return status ? httpStatusMessage(status) : 'Something went wrong. Please try again.';
+  }
+
+  /* 401 on sign-in always means wrong credentials regardless of body wording */
+  if (status === 401 && tab === 'signin') return 'Incorrect email or password.';
+
+  /* 409 on sign-up always means account exists */
+  if (status === 409 && tab === 'signup') return 'An account with this email already exists. Try signing in instead.';
+
+  return raw;
+}
 
 const BENEFITS = [
   'Track your course progress',
@@ -45,7 +68,7 @@ export default function LoginPage() {
       setTimeout(() => navigate(returnTo, { replace: true }), 1200);
     } catch (err: any) {
       clearTimeout(slowTimer); setSlow(false);
-      setError(err?.message ?? 'Something went wrong. Please try again.');
+      setError(friendlyAuthError(err, tab));
     } finally { setLoading(false); }
   };
 
