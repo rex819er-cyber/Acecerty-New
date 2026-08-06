@@ -66,14 +66,27 @@ async function authorisedRequest<T>(path: string, init: RequestInit = {}, ms = 6
 
 /* ── checkout ─────────────────────────────────────────────────────────── */
 
+/**
+ * Standard checkout payload.
+ *
+ * Primary fields match the spec:
+ *   { items, paymentMethod, amount, email }
+ *
+ * Legacy fields (courseId / courseIds / paymentProvider) are included so
+ * older backend builds that read those keys still work.
+ */
 export interface CheckoutRequest {
-  courseId: string;
-  paymentProvider: PaymentProvider;
-  paymentMethod: PaymentMethod;
-  /** Extra courses when the cart holds more than one; ignored by backends that don't read it. */
-  courseIds?: string[];
+  /** Cart line items — every backend variant reads at least one of these. */
+  items: { courseId: string; price: number }[];
+  /** Gateway selector sent in the spec payload. */
+  paymentMethod: 'paystack' | 'flutterwave' | 'card';
+  /** Total in the currency's smallest whole unit (NGN). */
+  amount: number;
   email?: string;
-  amount?: number;
+  /* legacy/compat fields */
+  courseId?: string;
+  courseIds?: string[];
+  paymentProvider?: PaymentProvider;
 }
 
 /* Gateways disagree on what they call the hosted-checkout URL, so accept the
@@ -94,8 +107,10 @@ export interface CheckoutResponse {
 export function extractAuthorizationUrl(res: CheckoutResponse): string | null {
   const d = res.data ?? {};
   return (
-    res.authorizationUrl ?? res.authorization_url ?? res.paymentUrl ?? res.checkoutUrl ?? res.link ??
-    d.authorizationUrl ?? d.authorization_url ?? d.paymentUrl ?? d.checkoutUrl ?? d.link ??
+    res.authorizationUrl   ?? res.authorization_url   ??
+    res.paymentUrl         ?? res.checkoutUrl          ?? res.link ??
+    d.authorizationUrl     ?? d.authorization_url      ??
+    d.paymentUrl           ?? d.checkoutUrl            ?? d.link ??
     null
   );
 }
@@ -104,11 +119,32 @@ export function extractReference(res: CheckoutResponse): string | null {
   return res.reference ?? res.data?.reference ?? res.data?.tx_ref ?? null;
 }
 
-export const startCheckout = (payload: CheckoutRequest) =>
-  authorisedRequest<CheckoutResponse>('/orders/checkout', {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  });
+/**
+ * POST the checkout payload.
+ *
+ * Tries `/orders/checkout` first (the primary spec route).
+ * If the backend returns 404 / 405 (route not registered), automatically
+ * retries against `/payments/initialize` — the Paystack/Flutterwave handler
+ * path used by some backend configurations.
+ */
+export async function startCheckout(payload: CheckoutRequest): Promise<CheckoutResponse> {
+  try {
+    return await authorisedRequest<CheckoutResponse>('/orders/checkout', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  } catch (err: any) {
+    /* 404 = route not wired on this deploy; 405 = method not allowed on that path.
+       Either means we should try the alternative endpoint. */
+    if (err?.status === 404 || err?.status === 405) {
+      return authorisedRequest<CheckoutResponse>('/payments/initialize', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+    }
+    throw err;
+  }
+}
 
 /* ── verification ─────────────────────────────────────────────────────── */
 

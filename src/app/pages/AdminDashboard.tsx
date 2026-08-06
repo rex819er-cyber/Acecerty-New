@@ -60,7 +60,7 @@ function StatCard({ icon, label, value, color }: { icon: React.ReactNode; label:
   );
 }
 
-function Badge({ status }: { status: string }) {
+function Badge({ status }: { status?: string | null }) {
   const map: Record<string, { bg: string; color: string }> = {
     completed: { bg: 'rgba(34,197,94,0.15)', color: '#22c55e' },
     success:   { bg: 'rgba(34,197,94,0.15)', color: '#22c55e' },
@@ -69,8 +69,9 @@ function Badge({ status }: { status: string }) {
     failed:    { bg: 'rgba(239,68,68,0.15)',  color: '#ef4444' },
     draft:     { bg: 'rgba(156,163,175,0.15)', color: '#9ca3af' },
   };
-  const s = map[status.toLowerCase()] ?? map.draft;
-  return <span style={{ background: s.bg, color: s.color, borderRadius: 20, padding: '2px 10px', fontSize: '0.72rem', fontWeight: 600, fontFamily: 'var(--ace-font)' }}>{status}</span>;
+  const lc = (status ?? '').toLowerCase();
+  const s = map[lc] ?? map.draft;
+  return <span style={{ background: s.bg, color: s.color, borderRadius: 20, padding: '2px 10px', fontSize: '0.72rem', fontWeight: 600, fontFamily: 'var(--ace-font)' }}>{status ?? '—'}</span>;
 }
 
 function TblWrap({ children }: { children: React.ReactNode }) {
@@ -134,6 +135,70 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
+/* ── null-safe rendering helpers ──────────────────────────────────────── */
+/** Coerces unknown to a finite number; returns fallback for null/undefined/NaN. */
+function safeNum(v: unknown, fallback = 0): number {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : fallback;
+}
+/** Normalises API responses that may wrap an array in an envelope object. */
+function safeArr<T>(raw: unknown, ...hints: string[]): T[] {
+  if (Array.isArray(raw)) return raw as T[];
+  if (raw && typeof raw === 'object') {
+    for (const k of [...hints, 'data', 'items', 'results', 'records']) {
+      const v = (raw as Record<string, unknown>)[k];
+      if (Array.isArray(v)) return v as T[];
+    }
+  }
+  return [];
+}
+/** Formats a date value to locale date string, returning '—' on bad input. */
+function safeDate(v: unknown): string {
+  if (!v) return '—';
+  try { const d = new Date(v as string); return isNaN(d.getTime()) ? String(v) : d.toLocaleDateString(); }
+  catch { return String(v ?? '—'); }
+}
+/** Formats a date value to locale datetime string, returning '—' on bad input. */
+function safeDatetime(v: unknown): string {
+  if (!v) return '—';
+  try { const d = new Date(v as string); return isNaN(d.getTime()) ? String(v) : d.toLocaleString(); }
+  catch { return String(v ?? '—'); }
+}
+
+/* ── Error Boundary — catches render crashes in any admin section ──────── */
+interface EBState { error: Error | null }
+class AdminErrorBoundary extends React.Component<{ children: React.ReactNode; sectionName?: string }, EBState> {
+  state: EBState = { error: null };
+  static getDerivedStateFromError(error: Error): EBState { return { error }; }
+  componentDidCatch(error: Error, info: React.ErrorInfo) {
+    console.error('[AdminDashboard] render error:', error, info);
+  }
+  render() {
+    if (!this.state.error) return this.props.children;
+    return (
+      <div style={{
+        padding: '32px 24px', borderRadius: 'var(--ace-radius-md)', margin: '16px 0',
+        background: 'color-mix(in srgb, var(--destructive) 8%, transparent)',
+        border: '1px solid color-mix(in srgb, var(--destructive) 30%, transparent)',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+          <AlertCircle size={20} style={{ color: 'var(--destructive)', flexShrink: 0 }} />
+          <span style={{ color: 'var(--destructive)', fontFamily: 'var(--ace-font)', fontWeight: 700 }}>
+            {this.props.sectionName ? `Error in ${this.props.sectionName}` : 'Something went wrong in this section'}
+          </span>
+        </div>
+        <pre style={{ color: 'var(--muted-foreground)', fontFamily: 'monospace', fontSize: '0.78rem', margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word', overflowX: 'auto' }}>
+          {this.state.error.message}
+        </pre>
+        <button onClick={() => this.setState({ error: null })}
+          style={{ marginTop: 14, padding: '7px 16px', borderRadius: 8, border: 'none', background: 'var(--ace-brand)', color: 'var(--primary-foreground)', fontFamily: 'var(--ace-font)', fontWeight: 600, cursor: 'pointer', fontSize: '0.82rem', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          <RefreshCw size={13} /> Try again
+        </button>
+      </div>
+    );
+  }
+}
+
 /* ── helper: live fetch with slow/error state ──────────────────────────── */
 function useLive<T>(fetcher: () => Promise<T>, fallback: T) {
   const navigate = useNavigate();
@@ -188,10 +253,10 @@ function OverviewSection() {
       {slow && <ColdBanner msg="Connecting to live backend…" />}
       {err  && <ErrBanner msg={err} onRetry={reload} />}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <StatCard icon={<DollarSign size={22} />} label="Total Revenue"  value={`₦${(stats.totalRevenue / 1000).toFixed(0)}K`} color="#22c55e" />
-        <StatCard icon={<ShoppingCart size={22} />} label="Total Orders" value={stats.totalOrders.toString()} color="var(--ace-brand)" />
-        <StatCard icon={<Users size={22} />} label="Students"            value={stats.totalStudents.toLocaleString()} color="#a78bfa" />
-        <StatCard icon={<BookOpen size={22} />} label="Courses"          value={stats.totalCourses.toString()} color="#fb923c" />
+        <StatCard icon={<DollarSign size={22} />} label="Total Revenue"  value={`₦${(safeNum(stats.totalRevenue) / 1000).toFixed(0)}K`} color="#22c55e" />
+        <StatCard icon={<ShoppingCart size={22} />} label="Total Orders" value={safeNum(stats.totalOrders).toLocaleString()} color="var(--ace-brand)" />
+        <StatCard icon={<Users size={22} />} label="Students"            value={safeNum(stats.totalStudents).toLocaleString()} color="#a78bfa" />
+        <StatCard icon={<BookOpen size={22} />} label="Courses"          value={safeNum(stats.totalCourses).toLocaleString()} color="#fb923c" />
       </div>
       {stats.revenueByMonth.length > 0 && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -237,7 +302,10 @@ function OverviewSection() {
 }
 
 function CoursesSection() {
-  const { data: courses, setData: setCourses, slow, err, reload } = useLive(adminGetCourses, [] as AdminCourse[]);
+  const { data: courses, setData: setCourses, slow, err, reload } = useLive(
+    () => adminGetCourses().then(r => safeArr<AdminCourse>(r, 'courses')),
+    [] as AdminCourse[],
+  );
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing]     = useState<AdminCourse | null>(null);
   const [form, setForm]           = useState({ title: '', description: '', category: '', level: 'Intermediate', format: 'online', price: '' });
@@ -392,12 +460,12 @@ function PricesSection() {
           {prices.map(p => (
             <tr key={p.id}>
               <Td>{p.courseId}</Td><Td>{p.region}</Td><Td>{p.currency}</Td>
-              <Td>{editing === p.id ? <input style={{ ...inp, width: 120, display: 'inline-block' }} value={editVal} onChange={e => setEditVal(e.target.value)} autoFocus /> : p.amount.toLocaleString()}</Td>
+              <Td>{editing === p.id ? <input style={{ ...inp, width: 120, display: 'inline-block' }} value={editVal} onChange={e => setEditVal(e.target.value)} autoFocus /> : safeNum(p.amount).toLocaleString()}</Td>
               <Td>
                 <div style={{ display: 'flex', gap: 6 }}>
                   {editing === p.id
                     ? <Btn size="sm" onClick={() => saveEdit(p)}><CheckCircle2 size={12} /></Btn>
-                    : <Btn size="sm" variant="ghost" onClick={() => { setEditing(p.id); setEditVal(p.amount.toString()); }}><Edit2 size={12} /></Btn>}
+                    : <Btn size="sm" variant="ghost" onClick={() => { setEditing(p.id); setEditVal(String(p.amount ?? '')); }}><Edit2 size={12} /></Btn>}
                   <Btn size="sm" variant="danger" onClick={() => doDelete(p.id)}><Trash2 size={12} /></Btn>
                 </div>
               </Td>
@@ -424,7 +492,10 @@ function PricesSection() {
 }
 
 function ModulesSection() {
-  const { data: courses, slow: cSlow } = useLive(adminGetCourses, [] as AdminCourse[]);
+  const { data: courses, slow: cSlow } = useLive(
+    () => adminGetCourses().then(r => safeArr<AdminCourse>(r, 'courses')),
+    [] as AdminCourse[],
+  );
   const [selectedCourse, setSelectedCourse] = useState('');
   const [modules, setModules] = useState<AdminModule[]>([]);
   const [newMod, setNewMod]   = useState('');
@@ -486,7 +557,10 @@ function ModulesSection() {
 }
 
 function ExamsSection() {
-  const { data: exams, setData: setExams, slow, err, reload } = useLive(adminGetExams, [] as AdminExamProduct[]);
+  const { data: exams, setData: setExams, slow, err, reload } = useLive(
+    () => adminGetExams().then(r => safeArr<AdminExamProduct>(r, 'exams')),
+    [] as AdminExamProduct[],
+  );
   const [selectedExam, setSelectedExam] = useState('');
   const [questions, setQuestions]       = useState<AdminQuestion[]>([]);
   const [showCreate, setShowCreate]     = useState(false);
@@ -545,7 +619,7 @@ function ExamsSection() {
           {exams.map(ex => (
             <tr key={ex.id}>
               <Td><span style={{ color: 'var(--foreground)', fontWeight: 600 }}>{ex.title}</span></Td>
-              <Td>{ex.questions}</Td><Td>{ex.duration} min</Td><Td>₦{ex.price.toLocaleString()}</Td>
+              <Td>{ex.questions ?? '—'}</Td><Td>{ex.duration != null ? `${ex.duration} min` : '—'}</Td><Td>₦{safeNum(ex.price).toLocaleString()}</Td>
               <Td><Badge status={ex.published ? 'published' : 'draft'} /></Td>
               <Td>
                 <div style={{ display: 'flex', gap: 6 }}>
@@ -629,7 +703,10 @@ function ExamsSection() {
 
 /* GET /api/admin/users — platform analytics: accounts, roles, growth */
 function UsersSection() {
-  const { data: users, slow, err, reload } = useLive(() => adminGetUsers(), [] as AdminUser[]);
+  const { data: users, slow, err, reload } = useLive(
+    () => adminGetUsers().then(r => safeArr<AdminUser>(r, 'users')),
+    [] as AdminUser[],
+  );
 
   const admins   = users.filter(u => u.role === 'admin').length;
   const students = users.length - admins;
@@ -653,11 +730,11 @@ function UsersSection() {
             <tr><td colSpan={4} style={{ textAlign: 'center', padding: '32px 0', color: 'var(--muted-foreground)', fontFamily: 'var(--ace-font)', fontSize: '0.85rem' }}>No users yet.</td></tr>
           )}
           {users.map(u => (
-            <tr key={u.id}>
+            <tr key={u.id ?? Math.random()}>
               <Td><span style={{ color: 'var(--foreground)', fontWeight: 600 }}>{u.fullName ?? u.name ?? '—'}</span></Td>
-              <Td>{u.email}</Td>
+              <Td>{u.email ?? '—'}</Td>
               <Td><Badge status={u.role === 'admin' ? 'published' : 'pending'} /></Td>
-              <Td>{u.createdAt ? new Date(u.createdAt).toLocaleDateString() : '—'}</Td>
+              <Td>{safeDate(u.createdAt)}</Td>
             </tr>
           ))}
         </tbody>
@@ -667,7 +744,10 @@ function UsersSection() {
 }
 
 function OrdersSection() {
-  const { data, slow, err, reload } = useLive(() => adminGetOrdersList(), [] as AdminOrder[]);
+  const { data, slow, err, reload } = useLive(
+    () => adminGetOrdersList().then(r => safeArr<AdminOrder>(r, 'orders')),
+    [] as AdminOrder[],
+  );
 
   const revenue = data.reduce((sum, o) => sum + (o.total ?? 0), 0);
   const paid    = data.filter(o => ['completed', 'success', 'paid'].includes((o.status ?? '').toLowerCase())).length;
@@ -689,10 +769,12 @@ function OrdersSection() {
         <tbody>
           {data.length === 0 && !slow && <tr><td colSpan={5} style={{ textAlign: 'center', padding: '32px 0', color: 'var(--muted-foreground)', fontFamily: 'var(--ace-font)', fontSize: '0.85rem' }}>No orders yet.</td></tr>}
           {data.map(o => (
-            <tr key={o.id}>
-              <Td><span style={{ fontFamily: 'monospace', fontSize: '0.78rem' }}>{o.id}</span></Td>
-              <Td>{o.userId}</Td><Td>₦{o.total.toLocaleString()}</Td>
-              <Td><Badge status={o.status} /></Td><Td>{o.createdAt}</Td>
+            <tr key={o.id ?? Math.random()}>
+              <Td><span style={{ fontFamily: 'monospace', fontSize: '0.78rem' }}>{o.id ?? '—'}</span></Td>
+              <Td>{o.userId ?? '—'}</Td>
+              <Td>₦{safeNum(o.total).toLocaleString()}</Td>
+              <Td><Badge status={o.status} /></Td>
+              <Td>{safeDate(o.createdAt)}</Td>
             </tr>
           ))}
         </tbody>
@@ -702,7 +784,10 @@ function OrdersSection() {
 }
 
 function PaymentsSection() {
-  const { data, slow, err, reload } = useLive(() => adminGetPayments().then(r => r.payments), [] as AdminPayment[]);
+  const { data, slow, err, reload } = useLive(
+    () => adminGetPayments().then(r => safeArr<AdminPayment>(r?.payments ?? r, 'payments')),
+    [] as AdminPayment[],
+  );
   return (
     <div>
       {slow && <ColdBanner msg="Loading payments from backend…" />}
@@ -713,11 +798,13 @@ function PaymentsSection() {
         <tbody>
           {data.length === 0 && !slow && <tr><td colSpan={6} style={{ textAlign: 'center', padding: '32px 0', color: 'var(--muted-foreground)', fontFamily: 'var(--ace-font)', fontSize: '0.85rem' }}>No payments yet.</td></tr>}
           {data.map(p => (
-            <tr key={p.id}>
-              <Td><span style={{ fontFamily: 'monospace', fontSize: '0.78rem' }}>{p.id}</span></Td>
-              <Td><span style={{ fontFamily: 'monospace', fontSize: '0.78rem' }}>{p.orderId}</span></Td>
-              <Td>₦{p.amount.toLocaleString()}</Td><Td>{p.method}</Td>
-              <Td><Badge status={p.status} /></Td><Td>{p.createdAt}</Td>
+            <tr key={p.id ?? Math.random()}>
+              <Td><span style={{ fontFamily: 'monospace', fontSize: '0.78rem' }}>{p.id ?? '—'}</span></Td>
+              <Td><span style={{ fontFamily: 'monospace', fontSize: '0.78rem' }}>{p.orderId ?? '—'}</span></Td>
+              <Td>₦{safeNum(p.amount).toLocaleString()}</Td>
+              <Td>{p.method ?? '—'}</Td>
+              <Td><Badge status={p.status} /></Td>
+              <Td>{safeDate(p.createdAt)}</Td>
             </tr>
           ))}
         </tbody>
@@ -727,7 +814,10 @@ function PaymentsSection() {
 }
 
 function LeadsSection() {
-  const { data, slow, err, reload } = useLive(() => adminGetLeads().then(r => r.leads), [] as AdminLead[]);
+  const { data, slow, err, reload } = useLive(
+    () => adminGetLeads().then(r => safeArr<AdminLead>(r?.leads ?? r, 'leads')),
+    [] as AdminLead[],
+  );
   return (
     <div>
       {slow && <ColdBanner msg="Loading leads from backend…" />}
@@ -738,9 +828,12 @@ function LeadsSection() {
         <tbody>
           {data.length === 0 && !slow && <tr><td colSpan={5} style={{ textAlign: 'center', padding: '32px 0', color: 'var(--muted-foreground)', fontFamily: 'var(--ace-font)', fontSize: '0.85rem' }}>No leads yet.</td></tr>}
           {data.map(l => (
-            <tr key={l.id}>
-              <Td><span style={{ color: 'var(--foreground)', fontWeight: 600 }}>{l.name}</span></Td>
-              <Td>{l.email}</Td><Td>{l.phone ?? '—'}</Td><Td>{l.source ?? '—'}</Td><Td>{l.createdAt}</Td>
+            <tr key={l.id ?? Math.random()}>
+              <Td><span style={{ color: 'var(--foreground)', fontWeight: 600 }}>{l.name ?? '—'}</span></Td>
+              <Td>{l.email ?? '—'}</Td>
+              <Td>{l.phone ?? '—'}</Td>
+              <Td>{l.source ?? '—'}</Td>
+              <Td>{safeDate(l.createdAt)}</Td>
             </tr>
           ))}
         </tbody>
@@ -750,7 +843,10 @@ function LeadsSection() {
 }
 
 function AuditSection() {
-  const { data, slow, err, reload } = useLive(() => adminGetAuditLogs().then(r => r.logs), [] as AdminAuditLog[]);
+  const { data, slow, err, reload } = useLive(
+    () => adminGetAuditLogs().then(r => safeArr<AdminAuditLog>(r?.logs ?? r, 'logs')),
+    [] as AdminAuditLog[],
+  );
   return (
     <div>
       {slow && <ColdBanner msg="Loading audit logs from backend…" />}
@@ -761,11 +857,11 @@ function AuditSection() {
         <tbody>
           {data.length === 0 && !slow && <tr><td colSpan={4} style={{ textAlign: 'center', padding: '32px 0', color: 'var(--muted-foreground)', fontFamily: 'var(--ace-font)', fontSize: '0.85rem' }}>No audit logs yet.</td></tr>}
           {data.map(l => (
-            <tr key={l.id}>
-              <Td><span style={{ fontFamily: 'monospace', fontSize: '0.78rem', color: 'var(--muted-foreground)' }}>{new Date(l.createdAt).toLocaleString()}</span></Td>
-              <Td>{l.userId}</Td>
-              <Td><span style={{ color: 'var(--ace-brand)', fontFamily: 'monospace', fontSize: '0.78rem' }}>{l.action}</span></Td>
-              <Td><span style={{ fontFamily: 'monospace', fontSize: '0.78rem' }}>{l.resource}</span></Td>
+            <tr key={l.id ?? Math.random()}>
+              <Td><span style={{ fontFamily: 'monospace', fontSize: '0.78rem', color: 'var(--muted-foreground)' }}>{safeDatetime(l.createdAt)}</span></Td>
+              <Td>{l.userId ?? '—'}</Td>
+              <Td><span style={{ color: 'var(--ace-brand)', fontFamily: 'monospace', fontSize: '0.78rem' }}>{l.action ?? '—'}</span></Td>
+              <Td><span style={{ fontFamily: 'monospace', fontSize: '0.78rem' }}>{l.resource ?? '—'}</span></Td>
             </tr>
           ))}
         </tbody>
@@ -808,17 +904,21 @@ export default function AdminDashboard() {
     navigate('/admin/login', { replace: true });
   }
 
+  const wrap = (name: string, node: React.ReactNode) => (
+    <AdminErrorBoundary sectionName={name}>{node}</AdminErrorBoundary>
+  );
+
   const SECTION_MAP: Record<Section, React.ReactNode> = {
-    overview:  <OverviewSection />,
-    courses:   <CoursesSection />,
-    prices:    <PricesSection />,
-    modules:   <ModulesSection />,
-    exams:     <ExamsSection />,
-    orders:    <OrdersSection />,
-    users:     <UsersSection />,
-    payments:  <PaymentsSection />,
-    leads:     <LeadsSection />,
-    audit:     <AuditSection />,
+    overview:  wrap('Overview',    <OverviewSection />),
+    courses:   wrap('Courses',     <CoursesSection />),
+    prices:    wrap('Prices',      <PricesSection />),
+    modules:   wrap('Modules',     <ModulesSection />),
+    exams:     wrap('Exams',       <ExamsSection />),
+    orders:    wrap('Orders',      <OrdersSection />),
+    users:     wrap('Users',       <UsersSection />),
+    payments:  wrap('Payments',    <PaymentsSection />),
+    leads:     wrap('Leads',       <LeadsSection />),
+    audit:     wrap('Audit Logs',  <AuditSection />),
   };
 
   return (

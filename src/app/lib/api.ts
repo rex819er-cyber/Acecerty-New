@@ -7,7 +7,9 @@
    • useApi<T> hook with 2 500 ms slowConnection indicator
 ───────────────────────────────────────────────────────────────────────── */
 
-export const API_BASE = 'https://acecerty-backend.onrender.com/api';
+export const API_BASE: string =
+  (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, '')
+  || 'https://acecerty-backend.onrender.com/api';
 
 /* ── token management ──────────────────────────────────────────────────── */
 const STUDENT_KEY = 'student_access_token';

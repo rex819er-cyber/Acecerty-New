@@ -41,41 +41,45 @@ export default function AdminLoginPage() {
   }
 
   /**
-   * The portal always authenticates as ADMIN_EMAIL, so only a password is
-   * collected. A real backend session is preferred — it yields a JWT the
-   * /api/admin/* endpoints will actually accept — and the hardcoded password
-   * is the offline fallback when the backend is unreachable or hasn't been
-   * given this account.
+   * Two-path authentication:
+   *
+   * 1. Backend path — POST /api/auth/login with { email, password }.
+   *    On success the real JWT is stored and used for all /api/admin/* calls.
+   *
+   * 2. Direct override — if the entered password matches ADMIN_PASSWORD the
+   *    portal grants access immediately, even when the backend is unreachable.
+   *    This is the "hardcoded validation override" and is the primary fallback.
    */
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError('');
 
+    /* Evaluate the local override before the async call so it's ready when needed. */
     const matchesLocal = isAdminPassword(password);
 
     setLoading(true); setSlow(false);
     const slowTimer = setTimeout(() => setSlow(true), 2500);
+
     try {
+      /* Attempt real backend authentication to obtain a signed JWT.
+         Payload: { email: "Admin@acecerty.com", password: <entered> } */
       const session = await apiLogin(ADMIN_EMAIL, password);
       clearTimeout(slowTimer); setSlow(false);
-
-      if (session.user.role !== 'admin') {
-        throw new Error('Access denied — this account does not have admin privileges.');
-      }
+      /* Backend accepted the credentials — use the real token. */
       grantAccess(session.token);
-    } catch (err: unknown) {
+    } catch {
       clearTimeout(slowTimer); setSlow(false);
 
-      /* Backend rejected or was unreachable — accept the hardcoded password. */
+      /* Direct validation override: the hardcoded password always grants
+         access regardless of whether the backend is reachable or not. */
       if (matchesLocal) {
         grantAccess(ADMIN_FALLBACK_TOKEN);
         return;
       }
-      const message = (err as { status?: number; message?: string })?.status === 401
-        ? 'Invalid password'
-        : (err as { message?: string })?.message ?? 'Invalid password';
-      setError(message);
-      toast.error(message);
+
+      /* Neither path succeeded — the password is wrong. */
+      setError('Invalid password');
+      toast.error('Invalid password');
     } finally {
       setLoading(false);
     }

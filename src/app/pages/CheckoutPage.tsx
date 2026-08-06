@@ -129,13 +129,22 @@ export default function CheckoutPage() {
 
     try {
       /* 2 — checkout execution */
+      const gateway = resolveGateway(option);
+      /* Map the UI option to the spec's paymentMethod field.
+         Paystack/Flutterwave are redirect gateways; everything else uses 'card'. */
+      const checkoutMethod: 'paystack' | 'flutterwave' | 'card' =
+        option === 'flutterwave' ? 'flutterwave' : option === 'card' ? 'card' : 'paystack';
+
       const res = await startCheckout({
-        courseId,
-        ...resolveGateway(option),
-        /* Sent for multi-item carts; backends that only read `courseId` ignore it. */
-        courseIds: items.map(i => i.course.id),
-        email: form.email || undefined,
+        /* Spec fields */
+        items: items.map(i => ({ courseId: i.course.id, price: i.course.price })),
+        paymentMethod: checkoutMethod,
         amount: total,
+        email: form.email || undefined,
+        /* Legacy compat — older backend builds that read these keys still work */
+        courseId,
+        courseIds: items.map(i => i.course.id),
+        paymentProvider: gateway.paymentProvider,
       });
       clearTimeout(slowTimer); setSlowConn(false);
 
